@@ -16,7 +16,7 @@ import { PROVIDERS, type ProviderId } from "../shared/providers.ts";
 import { type Strings, t } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { type PillAccount, type SwitchCode, pillStateRpc, switchAccountRpc } from "../shared/switch.ts";
-import { currentOf, exhaustedResetIn, hasSpare, pillFigure, tightestOf, usageLine } from "./format.ts";
+import { currentOf, exhaustedResetIn, hasSpare, pillFigure, tightestOf, usageLine, weekLine } from "./format.ts";
 import { createPillRegistry, trackClaudeAgents } from "./pill-registry.ts";
 import { AccountRing } from "./ring.tsx";
 import { typeScale } from "./typography.ts";
@@ -286,6 +286,11 @@ export function AccountPopover(props: PluginButtonContentProps) {
                           <Text style={{ ...typeScale.meta, color: tone }} numberOfLines={1}>
                             {usageLine(account, now, strings)}
                           </Text>
+                          {weekLine(account, now, strings) !== "" && (
+                            <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
+                              {weekLine(account, now, strings)}
+                            </Text>
+                          )}
                           {!account.current && !account.hasToken && (
                             <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
                               {canMint(account) ? strings.noTokenTap : strings.pillNotLoggedIn}

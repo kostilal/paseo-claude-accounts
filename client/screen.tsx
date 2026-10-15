@@ -197,9 +197,9 @@ function LoginCard({
   const loginState = terminalNotice(logIn, row.id, strings.mintFailed);
   const mintState = terminalNotice(mint, row.home, strings.mintFailed);
 
-  const fiveReset =
-    row.fiveHour !== null && Number.isFinite(Date.parse(row.fiveHour.resetsAt))
-      ? ` · ${strings.resetIn} ${formatWait(Math.max(0, Date.parse(row.fiveHour.resetsAt) - now), strings)}`
+  const resetSuffix = (bar: { resetsAt: string } | null) =>
+    bar !== null && Number.isFinite(Date.parse(bar.resetsAt))
+      ? ` · ${strings.resetIn} ${formatWait(Math.max(0, Date.parse(bar.resetsAt) - now), strings)}`
       : "";
 
   return (
@@ -222,8 +222,8 @@ function LoginCard({
 
       {row.loggedIn && (row.fiveHour !== null || row.sevenDay !== null) && (
         <View style={{ gap: 8 }}>
-          <Meter theme={theme} label={`${strings.fiveHourUsage}${fiveReset}`} bar={row.fiveHour} />
-          <Meter theme={theme} label={strings.sevenDayUsage} bar={row.sevenDay} />
+          <Meter theme={theme} label={`${strings.fiveHourUsage}${resetSuffix(row.fiveHour)}`} bar={row.fiveHour} />
+          <Meter theme={theme} label={`${strings.sevenDayUsage}${resetSuffix(row.sevenDay)}`} bar={row.sevenDay} />
         </View>
       )}
 

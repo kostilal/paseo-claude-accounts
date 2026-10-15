@@ -53,7 +53,15 @@ export function providerName(provider: string): string {
   return provider === "codex" ? "Codex" : provider === "claude" ? "Claude" : provider;
 }
 
-/** The second line of an account row, e.g. "Claude · 5h 18% · Week 62%". */
+/** "<label> <percent>% · resets in <wait>"; the wait is left out when the reset time is unknown. */
+export function windowText(label: string, bar: Window, now: number, strings: Strings): string {
+  const usage = `${label} ${Math.round(bar.utilization)}%`;
+  const at = Date.parse(bar.resetsAt);
+  return Number.isFinite(at) ? `${usage} · ${strings.resetIn} ${formatWait(Math.max(0, at - now), strings)}` : usage;
+}
+
+/** The second line of an account row, e.g. "Claude · 5 hours 18% · resets in 3 h". The week
+ *  has its own line, `weekLine`. */
 export function usageLine(account: PillAccount, now: number, strings: Strings): string {
   const parts = [providerName(account.provider)];
   if (!account.loggedIn) {
@@ -70,9 +78,15 @@ export function usageLine(account: PillAccount, now: number, strings: Strings): 
     parts.push(strings.limitExhausted, `${strings.resetIn} ${formatWait(wait, strings)}`);
     return parts.join(" · ");
   }
-  if (account.fiveHour !== null) parts.push(`${strings.fiveHourUsage} ${Math.round(account.fiveHour.utilization)}%`);
-  if (account.sevenDay !== null) parts.push(`${strings.sevenDayUsage} ${Math.round(account.sevenDay.utilization)}%`);
+  if (account.fiveHour !== null) parts.push(windowText(strings.fiveHourUsage, account.fiveHour, now, strings));
   return parts.join(" · ");
+}
+
+/** The third line of an account row, e.g. "Week 62% · resets in 5 d", or "" when there is
+ *  no weekly figure to show. */
+export function weekLine(account: PillAccount, now: number, strings: Strings): string {
+  if (!account.loggedIn || account.usage === "unsupported" || account.sevenDay === null) return "";
+  return windowText(strings.sevenDayUsage, account.sevenDay, now, strings);
 }
 
 /** Whether another account could take over now (the green dot on an exhausted pill). */

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { t } from "../shared/i18n.ts";
 import type { PillAccount, PillState } from "../shared/switch.ts";
-import { exhaustedResetIn, formatWait, hasSpare, pillFigure, tightestOf, usageLine } from "./format.ts";
+import { exhaustedResetIn, formatWait, hasSpare, pillFigure, tightestOf, usageLine, weekLine } from "./format.ts";
 
 const strings = t("ru");
 const now = Date.parse("2026-09-16T12:00:00Z");
@@ -57,12 +57,19 @@ test("the pill figure is a percentage until the wall, then the wait, and a dash 
 });
 
 test("a row's usage line names the provider and the state", () => {
-  assert.equal(usageLine(account(), now, strings), `Claude · ${strings.fiveHourUsage} 18% · ${strings.sevenDayUsage} 62%`);
+  assert.equal(usageLine(account(), now, strings), `Claude · ${strings.fiveHourUsage} 18% · ${strings.resetIn} 1 ч`);
   assert.equal(
     usageLine(account({ fiveHour: { utilization: 100, resetsAt: "2026-09-16T12:47:00Z" } }), now, strings),
     `Claude · ${strings.limitExhausted} · ${strings.resetIn} 47 мин`,
   );
   assert.equal(usageLine(account({ loggedIn: false }), now, strings), `Claude · ${strings.notLoggedIn}`);
+});
+
+test("the week has its own line with its reset, and none when there is nothing to show", () => {
+  assert.equal(weekLine(account(), now, strings), `${strings.sevenDayUsage} 62% · ${strings.resetIn} 36 ч`);
+  assert.equal(weekLine(account({ sevenDay: { utilization: 62, resetsAt: "" } }), now, strings), `${strings.sevenDayUsage} 62%`);
+  assert.equal(weekLine(account({ sevenDay: null }), now, strings), "");
+  assert.equal(weekLine(account({ loggedIn: false }), now, strings), "");
 });
 
 test("a spare is another account with a token and room left", () => {
