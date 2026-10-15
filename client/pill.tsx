@@ -6,7 +6,7 @@ import {
   useAgent,
   useRpc,
 } from "@getpaseo/plugin/client";
-import { Icon, ScrollView } from "@getpaseo/plugin/client/react-native";
+import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -245,79 +245,80 @@ export function AccountPopover(props: PluginButtonContentProps) {
           {ordered.length === 0 ? (
             <EmptyState theme={theme} icon="Users" title={strings.pillEmptyTitle} detail={strings.pillEmptyDetail} />
           ) : (
-            <ScrollView style={{ maxHeight: 420 }}>
-              <View style={{ gap: 6 }}>
-                {ordered.map((account) => {
-                  const tightest = tightestOf(account.fiveHour, account.sevenDay);
-                  const title = loginTitle(account, strings);
-                  const pressable = !account.current && !mint.isPending;
-                  const tone =
-                    tightest !== null && tightest >= 70 ? theme.colors[meterTone(tightest)] : theme.colors.foregroundMuted;
-                  return (
-                    <View key={account.key} style={{ gap: 6 }}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={title}
-                        accessibilityState={{ selected: account.current, disabled: !pressable }}
-                        disabled={!pressable}
-                        hitSlop={2}
-                        onPress={() => pressRow(account)}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 12,
-                          paddingVertical: 10,
-                          paddingHorizontal: 12,
-                          borderRadius: 12,
-                          borderWidth: account.current ? 2 : 1,
-                          borderColor: account.current
-                            ? theme.colors.accent
-                            : armed === account.switchTo
-                              ? theme.colors.statusWarning
-                              : theme.colors.border,
-                          backgroundColor: account.current ? theme.colors.surface2 : theme.colors.surface1,
-                        }}
-                      >
-                        <AccountRing theme={theme} size={30} provider={account.provider} tightest={tightest} dim={!account.hasToken && !account.current} />
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Text style={{ ...typeScale.body, fontWeight: "600", color: theme.colors.foreground }} numberOfLines={1}>
-                            {title}
+            // No ScrollView of its own. On a phone the popover is a content-sized sheet, and a
+            // scrollable inside it reports only the list's height to the sheet, which then
+            // opens too short to show the list. The host scrolls the popover on every layout.
+            <View style={{ gap: 6 }}>
+              {ordered.map((account) => {
+                const tightest = tightestOf(account.fiveHour, account.sevenDay);
+                const title = loginTitle(account, strings);
+                const pressable = !account.current && !mint.isPending;
+                const tone =
+                  tightest !== null && tightest >= 70 ? theme.colors[meterTone(tightest)] : theme.colors.foregroundMuted;
+                return (
+                  <View key={account.key} style={{ gap: 6 }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={title}
+                      accessibilityState={{ selected: account.current, disabled: !pressable }}
+                      disabled={!pressable}
+                      hitSlop={2}
+                      onPress={() => pressRow(account)}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 12,
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: account.current ? 2 : 1,
+                        borderColor: account.current
+                          ? theme.colors.accent
+                          : armed === account.switchTo
+                            ? theme.colors.statusWarning
+                            : theme.colors.border,
+                        backgroundColor: account.current ? theme.colors.surface2 : theme.colors.surface1,
+                      }}
+                    >
+                      <AccountRing theme={theme} size={30} provider={account.provider} tightest={tightest} dim={!account.hasToken && !account.current} />
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={{ ...typeScale.body, fontWeight: "600", color: theme.colors.foreground }} numberOfLines={1}>
+                          {title}
+                        </Text>
+                        <Text style={{ ...typeScale.meta, color: tone }} numberOfLines={1}>
+                          {usageLine(account, now, strings)}
+                        </Text>
+                        {weekLine(account, now, strings) !== "" && (
+                          <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
+                            {weekLine(account, now, strings)}
                           </Text>
-                          <Text style={{ ...typeScale.meta, color: tone }} numberOfLines={1}>
-                            {usageLine(account, now, strings)}
+                        )}
+                        {!account.current && !account.hasToken && (
+                          <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
+                            {canMint(account) ? strings.noTokenTap : strings.pillNotLoggedIn}
                           </Text>
-                          {weekLine(account, now, strings) !== "" && (
-                            <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
-                              {weekLine(account, now, strings)}
-                            </Text>
-                          )}
-                          {!account.current && !account.hasToken && (
-                            <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
-                              {canMint(account) ? strings.noTokenTap : strings.pillNotLoggedIn}
-                            </Text>
-                          )}
-                          {account.usage === "expired" && (
-                            <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={2}>
-                              {strings.usageExpired}
-                            </Text>
-                          )}
-                        </View>
-                        {account.current ? (
-                          <Icon name="Check" size={16} color={theme.colors.accent} />
-                        ) : pressable ? (
-                          <Icon
-                            name={account.hasToken ? "ChevronRight" : canMint(account) ? "KeyRound" : "LogIn"}
-                            size={16}
-                            color={theme.colors.foregroundMuted}
-                          />
-                        ) : null}
-                      </Pressable>
-                      {armed === account.switchTo && <Banner theme={theme} tone="warn" text={strings.switchBusy} />}
-                    </View>
-                  );
-                })}
-              </View>
-            </ScrollView>
+                        )}
+                        {account.usage === "expired" && (
+                          <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={2}>
+                            {strings.usageExpired}
+                          </Text>
+                        )}
+                      </View>
+                      {account.current ? (
+                        <Icon name="Check" size={16} color={theme.colors.accent} />
+                      ) : pressable ? (
+                        <Icon
+                          name={account.hasToken ? "ChevronRight" : canMint(account) ? "KeyRound" : "LogIn"}
+                          size={16}
+                          color={theme.colors.foregroundMuted}
+                        />
+                      ) : null}
+                    </Pressable>
+                    {armed === account.switchTo && <Banner theme={theme} tone="warn" text={strings.switchBusy} />}
+                  </View>
+                );
+              })}
+            </View>
           )}
           {unread !== null && (
             <Button
