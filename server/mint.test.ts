@@ -88,7 +88,7 @@ function deps(over: Partial<FinishDeps> = {}) {
   const value: FinishDeps = {
     validate: async (token) => {
       validated.push(token);
-      return token === TOKEN;
+      return token === TOKEN ? "" : null;
     },
     whoami: async () => "alice@example.com",
     identify: async () => identity("bob@example.com"),
@@ -148,7 +148,7 @@ test("a whoami that fails falls back to the directory's login too", async () => 
 });
 
 test("no candidate the API accepts is no-token, and nothing is written", async () => {
-  const fake = deps({ validate: async () => false });
+  const fake = deps({ validate: async () => null });
   assert.deepEqual(await finishMint(HOME, TOKEN, fake.deps), { ok: false, reason: "no-token" });
   assert.deepEqual(fake.written, []);
   assert.deepEqual(fake.registries, []);
@@ -195,25 +195,117 @@ test("a home no account is registered at stores the token but leaves the registr
   assert.deepEqual(fake.registries, []);
 });
 
+// finishMint and organisations: one email can hold a personal plan and a Team seat.
+
+const signedIn = (orgId: string, orgName: string): Identity => ({
+  loggedIn: true,
+  email: "alice@example.com",
+  orgName,
+  orgId,
+  subscriptionType: "",
+});
+
+test("a key for another organisation than the directory's is refused, and nothing is written", async () => {
+  const fake = deps({
+    validate: async (token) => (token === TOKEN ? "org-team" : null),
+    identify: async () => signedIn("org-personal", "alice's Organization"),
+  });
+  assert.deepEqual(await finishMint(HOME, TOKEN, fake.deps), {
+    ok: false,
+    reason: "wrong-org",
+    org: "alice's Organization",
+  });
+  assert.deepEqual(fake.written, []);
+  assert.deepEqual(fake.registries, []);
+});
+
+test("a key for the directory's own organisation is filed under the login and the organisation", async () => {
+  const fake = deps({
+    validate: async (token) => (token === TOKEN ? "org-team" : null),
+    identify: async () => signedIn("org-team", "Team"),
+  });
+  assert.deepEqual(await finishMint(HOME, TOKEN, fake.deps), { ok: true, login: "alice@example.com" });
+  assert.deepEqual(fake.written, [["alice@example.com/org-team", TOKEN]]);
+  const work = fake.registries[0]!.accounts.find((account) => account.home === HOME);
+  assert.equal(work?.tokenLogin, "alice@example.com");
+  assert.equal(work?.tokenOrg, "org-team");
+});
+
+test("one email minted in two organisations files two keys, not one over the other", async () => {
+  const keys: string[] = [];
+  for (const [home, org] of [
+    [HOME, "org-team"],
+    ["/Users/me/.claude-personal", "org-personal"],
+  ] as const) {
+    const fake = deps({
+      validate: async (token) => (token === TOKEN ? org : null),
+      identify: async () => signedIn(org, ""),
+    });
+    await finishMint(home, TOKEN, fake.deps);
+    keys.push(fake.written[0]![0]);
+  }
+  assert.deepEqual(keys, ["alice@example.com/org-team", "alice@example.com/org-personal"]);
+});
+
+test("a key the API names no organisation for is filed under the bare login and drops an old organisation", async () => {
+  const before = registry();
+  before.accounts[0] = { ...before.accounts[0]!, tokenLogin: "alice@example.com", tokenOrg: "org-old" };
+  const fake = deps({ readRegistry: async () => before });
+  await finishMint(HOME, TOKEN, fake.deps);
+  assert.deepEqual(fake.written, [["alice@example.com", TOKEN]]);
+  const work = fake.registries[0]!.accounts[0]!;
+  assert.equal(work.tokenLogin, "alice@example.com");
+  assert.equal("tokenOrg" in work, false);
+});
+
+test("a directory nobody is logged into is not held against the key's organisation", async () => {
+  const fake = deps({
+    validate: async (token) => (token === TOKEN ? "org-team" : null),
+    identify: async () => identity(""),
+  });
+  assert.deepEqual(await finishMint(HOME, TOKEN, fake.deps), { ok: true, login: "alice@example.com" });
+  assert.deepEqual(fake.written, [["alice@example.com/org-team", TOKEN]]);
+});
+
+test("the directory is asked once even when both the organisation and the login need it", async () => {
+  let asked = 0;
+  const fake = deps({
+    validate: async (token) => (token === TOKEN ? "org-team" : null),
+    whoami: async () => "",
+    identify: async () => {
+      asked += 1;
+      return signedIn("org-team", "Team");
+    },
+  });
+  assert.deepEqual(await finishMint(HOME, TOKEN, fake.deps), { ok: true, login: "alice@example.com" });
+  assert.equal(asked, 1);
+});
+
 // validateToken
 
-function fetcher(status: number | Error, seen: RequestInit[] = []): typeof fetch {
+function fetcher(status: number | Error, seen: RequestInit[] = [], headers: Record<string, string> = {}): typeof fetch {
   return (async (_url: string, init: RequestInit) => {
     seen.push(init);
     if (status instanceof Error) throw status;
-    return new Response(null, { status });
+    return new Response(null, { status, headers });
   }) as unknown as typeof fetch;
 }
 
 test("a token the API accepts, or recognises without access, is valid", async () => {
-  assert.equal(await validateToken(TOKEN, fetcher(200)), true);
-  assert.equal(await validateToken(TOKEN, fetcher(403)), true);
+  assert.equal(await validateToken(TOKEN, fetcher(200)), "");
+  assert.equal(await validateToken(TOKEN, fetcher(403)), "");
+});
+
+test("a valid token's organisation is read from the answer's header", async () => {
+  const org = { "anthropic-organization-id": "5c9398e1-1021-4d35-ba0c-3e2558f4e9bf" };
+  assert.equal(await validateToken(TOKEN, fetcher(200, [], org)), "5c9398e1-1021-4d35-ba0c-3e2558f4e9bf");
+  assert.equal(await validateToken(TOKEN, fetcher(401, [], org)), null);
 });
 
 test("a rejected token, a server error or a network failure is not valid", async () => {
-  assert.equal(await validateToken(TOKEN, fetcher(401)), false);
-  assert.equal(await validateToken(TOKEN, fetcher(500)), false);
-  assert.equal(await validateToken(TOKEN, fetcher(new Error("offline"))), false);
+  assert.equal(await validateToken(TOKEN, fetcher(401)), null);
+  assert.equal(await validateToken(TOKEN, fetcher(500)), null);
+  assert.equal(await validateToken(TOKEN, fetcher(new Error("offline"))), null);
 });
 
 test("the token is sent as a bearer token with the OAuth beta header", async () => {

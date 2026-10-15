@@ -16,6 +16,7 @@ test("a logged-in account yields its identity", () => {
     loggedIn: true,
     email: "bob@example.com",
     orgName: "Acme",
+    orgId: "9181569c",
     subscriptionType: "team",
   });
 });

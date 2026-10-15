@@ -2,6 +2,9 @@ export interface Identity {
   loggedIn: boolean;
   email: string;
   orgName: string;
+  /** Only `claude auth status` reports it; compared with the organisation a minted token
+   *  bills. */
+  orgId?: string;
   subscriptionType: string;
 }
 
@@ -34,6 +37,8 @@ export function parseAuthStatus(raw: string): Identity {
     loggedIn: body.loggedIn === true,
     email: str(body.email),
     orgName: str(body.orgName),
+    // Optional, so an identity from anywhere else (Codex, a logged-out directory) has none.
+    ...(str(body.orgId) === "" ? {} : { orgId: str(body.orgId) }),
     subscriptionType: str(body.subscriptionType),
   };
 }

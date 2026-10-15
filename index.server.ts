@@ -20,7 +20,7 @@ import { canonical } from "./shared/path.ts";
 import { PROVIDERS, type ProviderId, isProviderId, providerForHome } from "./shared/providers.ts";
 import { type Registry, accountById, registerAccount, removeAccounts, unhideHomes } from "./shared/registry.ts";
 import { preferences } from "./shared/settings.ts";
-import { pillStateRpc, switchAccountRpc } from "./shared/switch.ts";
+import { pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
 import { createApiKeyCheck } from "./server/apiKey.ts";
 import { claudeEnv, findClaude } from "./server/claude.ts";
 import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } from "./server/discover.ts";
@@ -36,6 +36,7 @@ import { createProjects } from "./server/projects.ts";
 import { reloadAgent } from "./server/reload.ts";
 import { MINTS_DIR, STATE_FILE, loadRegistry, readRegistry, writeRegistry } from "./server/store.ts";
 import { switchAccount } from "./server/switchAccount.ts";
+import { listChats, switchAll } from "./server/switchAll.ts";
 import { createUsage } from "./server/usage.ts";
 
 const run = promisify(execFile);
@@ -224,7 +225,7 @@ export default function contribute(server: PluginServerContext) {
 
   server.handle(switchAccountRpc, async (input) => {
     await adopt();
-    return switchAccount(
+    const result = await switchAccount(
       { agentId: input.agentId, accountId: input.account },
       {
         readRegistry,
@@ -235,6 +236,26 @@ export default function contribute(server: PluginServerContext) {
         reload: (agentId) => reloadAgent(agentId),
       },
     );
+    // The popover has closed by the time this answers; the log keeps the reason.
+    if (result.code !== "") log(`accounts: switching ${input.agentId} to ${input.account} failed (${result.code}) ${result.error}`.trimEnd());
+    return result;
+  });
+
+  server.handle(switchAllRpc, async (input, { paseo }) => {
+    await adopt();
+    const result = await switchAll(input.account, {
+      readRegistry,
+      writeRegistry: persist,
+      exists: directoryExists,
+      identify: (home) => discovery.identify(home),
+      readMintedToken: (login) => readMintedToken(login),
+      chats: () => listChats(paseo),
+      reload: (agentId) => reloadAgent(agentId),
+    });
+    // The screen only has room for counts; the reasons go here.
+    if (result.code !== "") log(`accounts: moving all chats to ${input.account} refused (${result.code})`);
+    if (result.failed > 0) log(`accounts: ${result.failed} chats kept their account: ${result.error}`);
+    return result;
   });
 
   server.handle(pillStateRpc, async (input, { paseo }) => {

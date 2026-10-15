@@ -37,10 +37,13 @@ rm -f "$result"
 const ABANDONED_AFTER_MS = 30 * 60_000;
 const POLL_MS = 1_000;
 
-const RESULT_TEXT: Record<"ok" | FinishResultReason | "error", (login: string) => string> = {
+const RESULT_TEXT: Record<"ok" | FinishResultReason | "error", (name: string) => string> = {
   ok: (login) => `== Done. Chats can now be switched to ${login}. You can close this terminal.\n`,
   "no-token": () => "!! No working key was found in the output. Close this terminal and try again.\n",
   "no-login": () => "!! Could not tell which account the key belongs to. Close this terminal and try again.\n",
+  "wrong-org": (org) =>
+    `!! The key was approved for another organisation than ${org || "the one this account is signed in to"}. ` +
+    "Nothing was saved. Switch claude.ai to that organisation in the browser, close this terminal and try again.\n",
   error: () => "!! The key could not be saved to the Keychain. Close this terminal and try again.\n",
 };
 
@@ -126,7 +129,7 @@ export function createMints(options: MintsOptions) {
       } else {
         const reason = outcome?.reason ?? "no-token";
         log(`accounts: mint finished without a token (${reason})`);
-        text = RESULT_TEXT[reason]("");
+        text = RESULT_TEXT[reason](outcome?.ok === false && outcome.reason === "wrong-org" ? outcome.org : "");
       }
     } catch (error) {
       log(`accounts: mint failed: ${error instanceof Error ? error.message : String(error)}`);

@@ -10,6 +10,7 @@ import {
   removeAccounts,
   unhideHomes,
   resolveAccount,
+  tokenKey,
   type Registry,
 } from "./registry.ts";
 
@@ -182,4 +183,17 @@ test("unhiding a home that is not hidden is a harmless no-op", () => {
   assert.deepEqual(result.registry.hidden, []);
   const { hidden: _hidden, ...old } = registry();
   assert.deepEqual(unhideHomes(old, ["/x"]).restored, []);
+});
+
+test("a token is keyed on its login and organisation, a legacy one on the login alone", () => {
+  assert.equal(tokenKey({ tokenLogin: "alice@example.com", tokenOrg: "org-team" }), "alice@example.com/org-team");
+  assert.equal(tokenKey({ tokenLogin: "alice@example.com", tokenOrg: "org-personal" }), "alice@example.com/org-personal");
+  assert.equal(tokenKey({ tokenLogin: "alice@example.com" }), "alice@example.com");
+  assert.equal(tokenKey({}), null);
+  assert.equal(tokenKey({ tokenLogin: "" }), null);
+});
+
+test("a stored organisation survives a read of the state file", () => {
+  const raw = { version: 2, accounts: [{ ...work, tokenLogin: "alice@example.com", tokenOrg: "org-team" }], agents: {} };
+  assert.equal(parseRegistry(raw)?.accounts[0]?.tokenOrg, "org-team");
 });

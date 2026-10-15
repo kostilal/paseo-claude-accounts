@@ -1,6 +1,6 @@
 import type { Identity } from "../shared/parse.ts";
 import { PROVIDERS, type ProviderSpec } from "../shared/providers.ts";
-import { type Registry, accountById, applyBinding } from "../shared/registry.ts";
+import { type Account, type Registry, accountById, applyBinding, tokenKey } from "../shared/registry.ts";
 import type { SwitchCode } from "../shared/switch.ts";
 import type { ReloadCode } from "./reload.ts";
 
@@ -22,6 +22,32 @@ export interface SwitchDeps {
   reload(agentId: string): Promise<{ code: ReloadCode; error: string }>;
 }
 
+/** The account a switch would land on, or why the session-open hook could not act on it.
+ *  Only reads, so a refusal leaves everything as it was. */
+export async function switchTarget(
+  registry: Registry,
+  accountId: string,
+  deps: Pick<SwitchDeps, "exists" | "identify" | "readMintedToken">,
+): Promise<{ target: Account } | { code: Exclude<SwitchCode, ""> }> {
+  const target = accountById(registry, accountId);
+  if (target === null) return { code: "unknown-account" };
+  // Defensive: a hand-edited state file must be refused, not throw.
+  const spec = PROVIDERS[target.provider] as ProviderSpec | undefined;
+  if (spec === undefined || !spec.supported) return { code: "unsupported-provider" };
+  if (!(await deps.exists(target.home))) return { code: "missing-directory" };
+
+  if (spec.switch.kind === "home") {
+    if (!(await deps.identify(target.home)).loggedIn) return { code: "not-logged-in" };
+  } else {
+    // Without a token the hook injects nothing and the session would reopen on the old
+    // account while the pill claimed the new one.
+    const key = tokenKey(target);
+    if (key === null) return { code: "no-token" };
+    if ((await deps.readMintedToken(key)) === null) return { code: "no-token" };
+  }
+  return { target };
+}
+
 /** Move one agent (this chat only) onto another account. The order is the error handling:
  *  refuse anything that cannot work before writing, then write the binding, then restart
  *  the session. Any failure leaves the previous state in place. Other chats, even in the
@@ -30,30 +56,14 @@ export async function switchAccount(
   input: SwitchInput,
   deps: SwitchDeps,
 ): Promise<{ code: SwitchCode; error: string }> {
-  const no = (code: SwitchCode, error = "") => ({ code, error });
-
   const registry = await deps.readRegistry();
-  const target = accountById(registry, input.accountId);
-  if (target === null) return no("unknown-account");
-  // Defensive: a hand-edited state file must be refused, not throw.
-  const spec = PROVIDERS[target.provider] as ProviderSpec | undefined;
-  if (spec === undefined || !spec.supported) return no("unsupported-provider");
-  if (!(await deps.exists(target.home))) return no("missing-directory");
-
-  // Refuse a switch the session-open hook could not act on, while nothing is written yet.
-  if (spec.switch.kind === "home") {
-    if (!(await deps.identify(target.home)).loggedIn) return no("not-logged-in");
-  } else {
-    // Without a token the hook injects nothing and the session would reopen on the old
-    // account while the pill claimed the new one.
-    if (target.tokenLogin === undefined || target.tokenLogin === "") return no("no-token");
-    if ((await deps.readMintedToken(target.tokenLogin)) === null) return no("no-token");
-  }
+  const checked = await switchTarget(registry, input.accountId, deps);
+  if ("code" in checked) return { code: checked.code, error: "" };
 
   // No "already on that account" short-circuit: the binding saying so does not prove the
   // session runs on it, so a retry must always reload.
 
-  await deps.writeRegistry(applyBinding(registry, { agentId: input.agentId, account: target.id }));
+  await deps.writeRegistry(applyBinding(registry, { agentId: input.agentId, account: checked.target.id }));
 
   const reloaded = await deps.reload(input.agentId);
   if (reloaded.code !== "") {

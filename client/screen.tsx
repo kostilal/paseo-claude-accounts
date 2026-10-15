@@ -2,7 +2,7 @@ import type { PluginTheme } from "@getpaseo/plugin";
 import { useRpc, type PluginSurfaceProps } from "@getpaseo/plugin/client";
 import { Modal } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import {
   connectAccount,
@@ -16,6 +16,7 @@ import {
   type HiddenView,
 } from "../shared/accounts.ts";
 import { loginLabel } from "../shared/identity.ts";
+import { switchAllRpc } from "../shared/switch.ts";
 import type { Strings } from "../shared/i18n.ts";
 import { useStrings } from "./locale.ts";
 import { PROVIDERS, type ProviderId, providerForHome } from "../shared/providers.ts";
@@ -110,6 +111,44 @@ function DeleteConfirm({
   );
 }
 
+/** "Move all chats here", confirmed and answered in its own label so the card never shifts:
+ *  the first press arms it, a second press within a few seconds moves the chats, and the
+ *  outcome stays on the button for a moment before it goes back to rest. Reasons for a
+ *  refusal or a failed restart go to the plugin log. */
+interface MoveAllState {
+  /** Whether the row can be switched to at all; the server refuses the rest anyway. */
+  available: boolean;
+  label: string;
+  armed: boolean;
+  pending: boolean;
+  onPress: () => void;
+}
+
+function MoveAllButton({ theme, state }: { theme: PluginTheme; state: MoveAllState }) {
+  if (!state.available) return null;
+  return (
+    <Button
+      theme={theme}
+      label={state.label}
+      icon="Users"
+      variant={state.armed ? "primary" : "ghost"}
+      disabled={state.pending}
+      onPress={state.onPress}
+    />
+  );
+}
+
+function moveAllSummary(
+  result: { code: string; moved: number; failed: number; skipped: number },
+  strings: Strings,
+): string {
+  if (result.code !== "") return strings.moveAllError;
+  const parts = [strings.moveAllDone.replace("{moved}", String(result.moved))];
+  if (result.skipped > 0) parts.push(strings.moveAllBusy.replace("{skipped}", String(result.skipped)));
+  if (result.failed > 0) parts.push(strings.moveAllFailed.replace("{failed}", String(result.failed)));
+  return parts.join(" · ");
+}
+
 function LoginCard({
   theme,
   row,
@@ -121,6 +160,7 @@ function LoginCard({
   mint,
   onMint,
   deleting,
+  moving,
 }: {
   theme: PluginTheme;
   row: AccountView;
@@ -132,28 +172,30 @@ function LoginCard({
   mint: RowMutation<{ code: "" | "no-workspace" | "unknown-account"; error: string; terminal: string }>;
   onMint: () => void;
   deleting: DeleteState;
+  moving: MoveAllState;
 }) {
   const title = loginTitle(row, strings);
   const tightest = tightestOf(row.fiveHour, row.sevenDay);
   const revealFailure = row.loggedIn ? revealNotice(showUsage, row.switchTo, strings) : null;
   const now = Date.now();
 
+  // Only failures: an opened terminal says what to do and when it is done, and a note that it
+  // opened would outlive the approval.
   const terminalNotice = (
     m: RowMutation<{ code: "" | "no-workspace" | "unknown-account"; error: string; terminal: string }>,
     id: string,
-    opened: string,
     failed: string,
   ): { text: string; tone: "info" | "bad" } | null => {
     if (m.variables !== id) return null;
     if (m.isError) return { text: `${failed} ${errorText(m.error)}`, tone: "bad" };
-    if (m.data === undefined) return m.isPending ? { text: opened, tone: "info" } : null;
+    if (m.data === undefined) return null;
     if (m.data.code === "no-workspace") return { text: strings.noWorkspace, tone: "bad" };
     if (m.data.code === "unknown-account") return { text: strings.usageUnknownAccount, tone: "bad" };
     if (m.data.error !== "") return { text: `${failed} ${m.data.error}`, tone: "bad" };
-    return { text: opened, tone: "info" };
+    return null;
   };
-  const loginState = terminalNotice(logIn, row.id, strings.loginOpened, strings.mintFailed);
-  const mintState = terminalNotice(mint, row.home, strings.mintOpened, strings.mintFailed);
+  const loginState = terminalNotice(logIn, row.id, strings.mintFailed);
+  const mintState = terminalNotice(mint, row.home, strings.mintFailed);
 
   const fiveReset =
     row.fiveHour !== null && Number.isFinite(Date.parse(row.fiveHour.resetsAt))
@@ -211,11 +253,12 @@ function LoginCard({
         {row.loggedIn && (row.usage === "unauthorised" || row.usage === "error") && revealFailure === null && (
           <Button theme={theme} label={strings.showUsage} variant="ghost" disabled={showUsage.isPending} onPress={onShowUsage} />
         )}
-        {row.loggedIn && !row.hasToken && (
+        {row.loggedIn && PROVIDERS[row.provider as ProviderId]?.switch.kind === "token" && (
           <Button
             theme={theme}
-            label={strings.mintToken}
+            label={row.hasToken ? strings.mintTokenAgain : strings.mintToken}
             icon="KeyRound"
+            variant="ghost"
             disabled={mint.isPending}
             onPress={onMint}
           />
@@ -223,6 +266,7 @@ function LoginCard({
         {(!row.loggedIn || row.usage === "expired") && (
           <Button theme={theme} label={strings.logIn} variant="ghost" disabled={logIn.isPending} onPress={onLogIn} />
         )}
+        <MoveAllButton theme={theme} state={moving} />
         <DeleteButton theme={theme} strings={strings} state={deleting} />
       </View>
       <DeleteConfirm theme={theme} strings={strings} state={deleting} question={strings.deleteConfirm} />
@@ -241,6 +285,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
   const doMint = useRpc(mintToken);
   const doRemove = useRpc(removeAccount);
   const doUnhide = useRpc(unhideAccount);
+  const doMoveAll = useRpc(switchAllRpc);
   const queryClient = useQueryClient();
   const overviewKey = ["accounts", "overview"];
   // Logins run in a terminal the screen cannot observe, so for a few minutes after one
@@ -300,7 +345,12 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
     // Use the suggestion's own provider, so a discovered `~/.codex-*` is not registered as Claude.
     mutationFn: (home: string) =>
       doConnect({ provider: providerForHome(home) ?? "claude", home, label: "", login: false }),
-    onSuccess: invalidate,
+    // An account is added to be switched to, so a token account goes straight on to its
+    // switching key: one browser approval instead of a second button to find.
+    onSuccess: (result, home) => {
+      invalidate();
+      if (result.code === "" && PROVIDERS[providerForHome(home) ?? "claude"].switch.kind === "token") mint.mutate(home);
+    },
   });
 
   // Keyed by row `id` so only the pressed row asks. A registered row is a login and may span
@@ -333,6 +383,49 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
       },
       onCancel: () => setConfirming(null),
       onConfirm: () => remove.mutate({ row: row.id, accounts: targets }),
+    };
+  };
+
+  // Keyed by row `id`; the server moves chats to the row's `switchTo`. An armed press and a
+  // shown outcome both lapse after a few seconds.
+  const [armed, setArmed] = useState<string | null>(null);
+  useEffect(() => {
+    if (armed === null) return;
+    const timer = setTimeout(() => setArmed(null), 5_000);
+    return () => clearTimeout(timer);
+  }, [armed]);
+  const moveAll = useMutation({
+    mutationFn: (input: { row: string; account: string }) => doMoveAll({ account: input.account }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["accounts", "pill"] }),
+  });
+  const moveAllSettled = moveAll.isSuccess || moveAll.isError;
+  useEffect(() => {
+    if (!moveAllSettled) return;
+    const timer = setTimeout(() => moveAll.reset(), 5_000);
+    return () => clearTimeout(timer);
+  }, [moveAllSettled]);
+  const moveAllState = (row: AccountView): MoveAllState => {
+    const mine = moveAll.variables?.row === row.id;
+    let label = strings.moveAllChats;
+    if (mine && moveAll.isPending) label = strings.moveAllRunning;
+    else if (mine && moveAll.isError) label = strings.moveAllError;
+    else if (mine && moveAll.data !== undefined) label = moveAllSummary(moveAll.data, strings);
+    else if (armed === row.id) label = strings.moveAllConfirm;
+    const switchable = row.hasToken || PROVIDERS[row.provider as ProviderId]?.switch.kind === "home";
+    return {
+      available: row.registered && row.loggedIn && row.switchTo !== "" && switchable,
+      label,
+      armed: armed === row.id,
+      pending: moveAll.isPending,
+      onPress: () => {
+        if (armed === row.id) {
+          setArmed(null);
+          moveAll.mutate({ row: row.id, account: row.switchTo });
+        } else {
+          moveAll.reset();
+          setArmed(row.id);
+        }
+      },
     };
   };
 
@@ -435,6 +528,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
                   mint={mint}
                   onMint={() => mint.mutate(row.home)}
                   deleting={deleteState(row)}
+                  moving={moveAllState(row)}
                 />
               ))}
               <View style={{ flexDirection: "row" }}>{addButton}</View>

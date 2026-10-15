@@ -9,6 +9,9 @@ composer: the session restarts on that account and the conversation carries on.
 - **Accounts screen.** Every Claude login on the machine, grouped by subscription, with usage bars,
   login buttons and "Add account".
 - **Per chat.** A switch moves one chat. Other chats, even in the same project, stay where they are.
+- **All chats at once.** "Move all chats here" on an account, pressed twice, moves every chat in
+  every workspace onto it. Idle chats restart on it now, closed ones when they next open; a chat in the middle of
+  a turn is left alone rather than cut off.
 
 <p>
   <img src="assets/pill.png" alt="The account pill and its popover above a chat composer" width="400">
@@ -38,10 +41,12 @@ If `paseo` is not on your PATH, it is at `/Applications/Paseo.app/Contents/Resou
    under *Found on this machine*; press **Add** on each one you want. To add a subscription you
    have not used from this Mac yet, press **Add account**: a terminal opens `claude auth login`
    in a new `~/.claude-account-N` directory.
-2. **Enable switching.** Press **Enable switching** on an account (or tap it in the pill). A
-   terminal runs `claude setup-token`; approve in the browser with the account you want that row
-   to bill. The token is checked and saved to the Keychain, and the terminal tells you when it is
-   done.
+2. **Approve the switching key.** Adding an account opens a terminal running `claude setup-token`;
+   approve in the browser with the account and organisation that row is signed in to. The token is
+   checked and saved to the Keychain, and the terminal tells you when it is done. A key approved
+   for another organisation is refused and nothing is saved: switch claude.ai to the right
+   organisation and try again. If the terminal was closed early, or for an account added with
+   **Add account**, press **Issue switching key** on it (or tap it in the pill).
 3. **Switch.** In any Claude chat, press the pill and pick an account. If the agent is in the
    middle of a turn, the first press warns that the turn will be interrupted and the second press
    switches.
@@ -87,7 +92,7 @@ The endpoint rate-limits aggressively; on a 429 the last reading is kept until t
 | What | Where |
 |---|---|
 | Accounts, per-chat choices, hidden directories | `~/.paseo-claude-accounts/accounts.json` |
-| Switching tokens | Keychain, service `paseo-claude-accounts`, account = login email |
+| Switching tokens | Keychain, service `paseo-claude-accounts`, account = `<login email>/<organisation id>` (tokens saved by 0.1.1 and earlier: the email alone) |
 | `setup-token` transcripts while a token is being saved | `~/.paseo-claude-accounts/mints/`, mode 0700, deleted as soon as the token is read |
 
 Tokens are never written to the state file, logged, or sent to the app. They are passed to
@@ -109,10 +114,10 @@ In Paseo's settings, under **Accounts**:
 - **macOS only.**
 - **A switch restarts the session**, which ends a turn in progress.
 - **Tokens from `setup-token` cannot read usage.** An account's meter comes from a config directory
-  signed in to the same login. A token whose browser approval went to a different account than the
-  directory is signed in as still works, but the meter shows the directory's account.
+  signed in to the same login, so a token is only accepted for the organisation that directory is
+  signed in to; otherwise the meter would show an allowance the token does not spend.
 - **Revoked tokens are not detected in advance.** A chat switched to one fails on its next turn;
-  run **Enable switching** again for that account.
+  press **Renew switching key** on that account.
 - **API keys win.** If `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` or
   `CLAUDE_CODE_USE_VERTEX` is set in the environment Paseo starts Claude Code with, Claude Code
   ignores the account token. The plugin shows a warning when it finds one in the daemon's
@@ -128,11 +133,14 @@ In Paseo's settings, under **Accounts**:
 `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/.claude/local` and `~/.npm-global/bin`,
 then PATH. A daemon started from the Dock does not get your shell's PATH.
 
-**"Switching is not enabled for that account yet."** The account has no token. Press **Enable
-switching**.
+**"That account has no switching key yet."** Press **Issue switching key** on it.
 
 **A switch did nothing.** Check `paseo plugin logs claude-accounts`. The hook logs one line when it
 leaves a session alone, for example when a Keychain dialog is waiting.
+
+**A switch lands on the other organisation of the same email.** Before 0.1.2 tokens were filed
+under the email alone, so a personal plan and a Team seat on one address shared one token. Press
+**Renew switching key** on each of them.
 
 **Every plugin fails with `Module "@getpaseo/plugin/client" is not available`.** The app (often the
 phone) is older than the daemon. Update it.

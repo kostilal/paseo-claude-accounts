@@ -1,7 +1,7 @@
 import { timeoutSignal } from "./net.ts";
 import type { Identity } from "../shared/parse.ts";
 import { canonical } from "../shared/path.ts";
-import type { Registry } from "../shared/registry.ts";
+import { type Registry, tokenKey } from "../shared/registry.ts";
 
 const TOKEN = /sk-ant-oat[0-9]{2}-[A-Za-z0-9_-]+/g;
 const TOKEN_TAIL = /^[A-Za-z0-9_-]+/;
@@ -52,8 +52,9 @@ export function tokenCandidates(transcript: string): string[] {
 }
 
 export interface FinishDeps {
-  /** Whether the API accepts this token. */
-  validate(token: string): Promise<boolean>;
+  /** The organisation the API says this token bills ("" when it does not say), or null
+   *  when the API does not accept the token. */
+  validate(token: string): Promise<string | null>;
   /** The email `claude auth status` reports for this token, or "" when it does not say. */
   whoami(token: string): Promise<string>;
   /** Who the config directory itself is logged in as. */
@@ -65,38 +66,63 @@ export interface FinishDeps {
 
 export type FinishResult =
   | { ok: true; login: string }
-  | { ok: false; reason: "no-token" | "no-login" };
+  | { ok: false; reason: "no-token" | "no-login" }
+  /** The browser approved the key for another organisation than the one the directory is
+   *  signed in to; `org` names the directory's. */
+  | { ok: false; reason: "wrong-org"; org: string };
 
 /**
  * Turns a finished `setup-token` transcript into a stored token: the first candidate the
- * API accepts is filed in the Keychain under the login it belongs to, and the account at
- * `home` records that login as `tokenLogin`.
+ * API accepts is filed in the Keychain under the login and organisation it belongs to, and
+ * the account at `home` records them as `tokenLogin` and `tokenOrg`.
  *
  * The login comes from the token itself where possible. `setup-token` authorises whoever is
  * signed in to the browser, which need not be the account the directory is signed in as;
- * the directory's own login is only the fallback.
+ * the directory's own login is only the fallback. The organisation is not allowed to differ:
+ * one email can hold a personal plan and a Team seat, and a key for the wrong one would bill
+ * an allowance the pill does not show, so such a key is refused and nothing is written.
  */
 export async function finishMint(home: string, transcript: string, deps: FinishDeps): Promise<FinishResult> {
   let token: string | null = null;
+  let org = "";
   for (const candidate of tokenCandidates(transcript)) {
-    if (await deps.validate(candidate)) {
+    const accepted = await deps.validate(candidate);
+    if (accepted !== null) {
       token = candidate;
+      org = accepted;
       break;
     }
   }
   if (token === null) return { ok: false, reason: "no-token" };
 
   const dir = canonical(home);
+  // Asked at most once, and only when needed: it runs `claude auth status`.
+  let directory: Promise<Identity | null> | null = null;
+  const identifyDir = () => (directory ??= deps.identify(dir).catch(() => null));
+
+  if (org !== "") {
+    const own = await identifyDir();
+    if (own?.loggedIn && own.orgId && own.orgId !== org) {
+      return { ok: false, reason: "wrong-org", org: own.orgName };
+    }
+  }
+
   let login = await deps.whoami(token).catch(() => "");
-  if (login === "") login = (await deps.identify(dir).catch(() => null))?.email ?? "";
+  if (login === "") login = (await identifyDir())?.email ?? "";
   if (login === "") return { ok: false, reason: "no-login" };
 
-  await deps.writeToken(login, token);
+  const filed = { tokenLogin: login, ...(org === "" ? {} : { tokenOrg: org }) };
+  await deps.writeToken(tokenKey(filed)!, token);
   const registry = await deps.readRegistry();
   if (registry.accounts.some((account) => account.home === dir)) {
     await deps.writeRegistry({
       ...registry,
-      accounts: registry.accounts.map((account) => (account.home === dir ? { ...account, tokenLogin: login } : account)),
+      accounts: registry.accounts.map((account) => {
+        if (account.home !== dir) return account;
+        // A key minted without a known organisation must not keep a previous one's.
+        const { tokenOrg: _previous, ...rest } = account;
+        return { ...rest, ...filed };
+      }),
     });
   }
   return { ok: true, login };
@@ -104,9 +130,11 @@ export async function finishMint(home: string, transcript: string, deps: FinishD
 
 const MODELS_ENDPOINT = "https://api.anthropic.com/v1/models?limit=1";
 
-/** A token the API recognises: 200, or 403 for a valid token without access to this
- *  endpoint. 401 and anything else is not the token. Never logs the token. */
-export async function validateToken(token: string, fetcher: typeof fetch = fetch): Promise<boolean> {
+/** The organisation a token the API recognises bills, read from the
+ *  `anthropic-organization-id` header ("" when the answer does not carry it), or null for a
+ *  token it does not recognise. 200, or 403 for a valid token without access to this
+ *  endpoint, is recognised; 401 and anything else is not the token. Never logs the token. */
+export async function validateToken(token: string, fetcher: typeof fetch = fetch): Promise<string | null> {
   try {
     const response = await fetcher(MODELS_ENDPOINT, {
       headers: {
@@ -116,8 +144,9 @@ export async function validateToken(token: string, fetcher: typeof fetch = fetch
       },
       signal: timeoutSignal(15_000),
     });
-    return response.status === 200 || response.status === 403;
+    if (response.status !== 200 && response.status !== 403) return null;
+    return response.headers.get("anthropic-organization-id") ?? "";
   } catch {
-    return false;
+    return null;
   }
 }

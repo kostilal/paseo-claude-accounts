@@ -141,6 +141,22 @@ test("the token is looked up under the account's tokenLogin, not the directory's
   assert.deepEqual(asked, ["alice@example.com"]);
 });
 
+test("an account with an organisation is looked up under its login and organisation", async () => {
+  const asked: string[] = [];
+  const result = await switchAccount(
+    input,
+    deps([], {
+      readRegistry: async () => registry({ accounts: [work, { ...home, tokenOrg: "org-team" }] }),
+      readMintedToken: async (key) => {
+        asked.push(key);
+        return "sk-ant-oat01-example";
+      },
+    }),
+  );
+  assert.equal(result.code, "");
+  assert.deepEqual(asked, ["alice@example.com/org-team"]);
+});
+
 test("a Keychain read that will not answer aborts with nothing written", async () => {
   // A KeychainTimeout happens before the first write, so nothing has changed.
   const log: string[] = [];

@@ -34,6 +34,29 @@ export const switchAccountRpc = defineRpc({
   }),
 });
 
+export const switchAllRpc = defineRpc({
+  name: "accounts.switch-all",
+  input: z.object({
+    /** The account id to move every chat of its provider to, in every workspace, except
+     *  chats in the middle of a turn. */
+    account: z.string(),
+  }),
+  output: z.object({
+    /** A refusal of the target, before anything was written. */
+    code: switchCode.default(""),
+    /** Chats now bound to the account. */
+    moved: z.number().default(0),
+    /** Of those, open chats restarted on it now; closed ones switch when they next open. */
+    restarted: z.number().default(0),
+    /** Open chats whose restart failed; they keep their previous account. */
+    failed: z.number().default(0),
+    /** Chats in the middle of a turn, left on their account rather than cut off. */
+    skipped: z.number().default(0),
+    /** The first failed restart's message; empty otherwise. */
+    error: z.string().default(""),
+  }),
+});
+
 export const pillAccount = z.object({
   /** The registry's label for the directory a press lands in (`switchTo`, or the lowest
    *  member of `accountIds`). Rows are titled by their login; this is the fallback, and what

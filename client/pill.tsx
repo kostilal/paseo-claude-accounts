@@ -56,19 +56,18 @@ function rawErrorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** A switch finishes after the popover has closed, so a failure cannot be shown where it was
+ *  asked for. It is kept per chat and shown the next time that chat's popover opens. */
+const failedSwitches = new Map<string, { code: SwitchCode; error: string }>();
+
 function switchNotice(
-  move: { isPending: boolean; isError: boolean; error: unknown; data: { code: SwitchCode; error: string } | undefined },
+  failure: { code: SwitchCode; error: string } | null,
   strings: Strings,
 ): { text: string; tone: NoticeTone } | null {
-  if (move.isPending) return { text: strings.switching, tone: "info" };
-  if (move.isError) return { text: rawErrorText(move.error), tone: "bad" };
-  if (move.data === undefined) return null;
-  if (move.data.code === "reload-failed") return { text: move.data.error, tone: "bad" };
-  if (move.data.code !== "") {
-    const text = messageFor(move.data.code, strings);
-    return text === "" ? null : { text, tone: "bad" };
-  }
-  return null;
+  if (failure === null) return null;
+  if (failure.code === "reload-failed") return { text: failure.error, tone: "bad" };
+  const text = messageFor(failure.code, strings);
+  return text === "" ? null : { text, tone: "bad" };
 }
 
 const pillKey = (agentId: string) => ["accounts", "pill", agentId];
@@ -168,13 +167,6 @@ export function AccountPopover(props: PluginButtonContentProps) {
     onSuccess: () => queries.invalidateQueries({ queryKey: key }),
   });
 
-  const move = useMutation({
-    mutationFn: (account: string) => doSwitch({ agentId, account }),
-    onSuccess: async (result) => {
-      await queries.invalidateQueries({ queryKey: key });
-      if (result.code === "") close();
-    },
-  });
 
   // A press while the agent is working arms the row; a second press switches. Rows stay
   // pressable through a turn because noticing a limit happens while the agent is working.
@@ -199,10 +191,19 @@ export function AccountPopover(props: PluginButtonContentProps) {
       return;
     }
     setArmed(null);
-    move.mutate(account.switchTo);
+    // Close at once and let the switch finish in the background; the pill catches up when
+    // the session has restarted on the new account.
+    failedSwitches.delete(agentId);
+    close();
+    void doSwitch({ agentId, account: account.switchTo })
+      .then((result) => {
+        if (result.code !== "") failedSwitches.set(agentId, result);
+      })
+      .catch((reason: unknown) => failedSwitches.set(agentId, { code: "reload-failed", error: rawErrorText(reason) }))
+      .finally(() => void queries.invalidateQueries({ queryKey: ["accounts", "pill"] }));
   }
 
-  const notice = switchNotice(move, strings);
+  const notice = switchNotice(failedSwitches.get(agentId) ?? null, strings);
   const now = Date.now();
   const loadFailedBanner = (
     <Banner
@@ -214,14 +215,14 @@ export function AccountPopover(props: PluginButtonContentProps) {
   );
 
   const mintNotice = (): { text: string; tone: NoticeTone } | null => {
-    if (mint.variables === undefined) return null;
-    if (mint.isPending) return { text: strings.mintOpened, tone: "info" };
+    // Only failures: the terminal itself says what to do and when it is done.
+    if (mint.variables === undefined || mint.isPending) return null;
     if (mint.isError) return { text: `${strings.mintFailed} ${rawErrorText(mint.error)}`, tone: "bad" };
     if (mint.data === undefined) return null;
     if (mint.data.code === "no-workspace") return { text: strings.noWorkspace, tone: "bad" };
     if (mint.data.code === "unknown-account") return { text: strings.usageUnknownAccount, tone: "bad" };
     if (mint.data.error !== "") return { text: `${strings.mintFailed} ${mint.data.error}`, tone: "bad" };
-    return { text: strings.mintOpened, tone: "info" };
+    return null;
   };
   const minted = mintNotice();
 
@@ -249,7 +250,7 @@ export function AccountPopover(props: PluginButtonContentProps) {
                 {ordered.map((account) => {
                   const tightest = tightestOf(account.fiveHour, account.sevenDay);
                   const title = loginTitle(account, strings);
-                  const pressable = !account.current && !move.isPending && !mint.isPending;
+                  const pressable = !account.current && !mint.isPending;
                   const tone =
                     tightest !== null && tightest >= 70 ? theme.colors[meterTone(tightest)] : theme.colors.foregroundMuted;
                   return (

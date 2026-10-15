@@ -29,7 +29,6 @@ export interface Strings {
   currentAccount: string;
   switchTo: string;
   pillNotLoggedIn: string;
-  switching: string;
   switchPaseoMissing: string;
   switchMissingDirectory: string;
   switchUnsupportedProvider: string;
@@ -49,7 +48,9 @@ export interface Strings {
   noTokenTap: string;
   tokenReady: string;
   mintToken: string;
-  mintOpened: string;
+  /** The same mint for an account that already has a key: a revoked one, or one filed before
+   *  keys were kept per organisation. Adding an account starts the first mint by itself. */
+  mintTokenAgain: string;
   mintFailed: string;
   addAccount: string;
   add: string;
@@ -82,6 +83,18 @@ export interface Strings {
   hiddenNoLogin: string;
   restore: string;
   restoreFailed: string;
+  /** Moves every chat in every workspace onto one account. Every state is the button's own
+   *  label, so keep them short. */
+  moveAllChats: string;
+  /** The armed button: a second press moves. */
+  moveAllConfirm: string;
+  moveAllRunning: string;
+  /** The outcome, joined with " · ": `{moved}`, `{skipped}` (busy chats left alone) and
+   *  `{failed}` are replaced with counts. */
+  moveAllDone: string;
+  moveAllBusy: string;
+  moveAllFailed: string;
+  moveAllError: string;
 }
 
 const en: Strings = {
@@ -112,11 +125,10 @@ const en: Strings = {
   currentAccount: "This chat runs on",
   switchTo: "Switch to",
   pillNotLoggedIn: "Not logged in",
-  switching: "Switching…",
   switchPaseoMissing: "Could not find the paseo command to restart the session",
   switchMissingDirectory: "That account's directory is gone",
   switchUnsupportedProvider: "That account is for a provider this plugin does not run yet",
-  switchNoToken: "Switching is not enabled for that account yet",
+  switchNoToken: "That account has no switching key yet",
   switchNotLoggedIn: "Nobody is logged in to that account's directory yet",
   switchUnknownAccount: "That account is not in the list any more",
   switchBusy: "This will interrupt the current turn. Press again to switch anyway.",
@@ -129,10 +141,10 @@ const en: Strings = {
   pillEmptyTitle: "No accounts yet",
   pillEmptyDetail: "Add one in Accounts first.",
   noTokenYet: "Switching not enabled yet",
-  noTokenTap: "tap to enable switching",
+  noTokenTap: "tap to issue a switching key",
   tokenReady: "Switchable",
-  mintToken: "Enable switching",
-  mintOpened: "A terminal opened. Approve in the browser and come back; this list updates by itself. If the terminal asks for a code, paste the one the browser shows.",
+  mintToken: "Issue switching key",
+  mintTokenAgain: "Renew switching key",
   mintFailed: "Could not start enabling switching.",
   addAccount: "Add account",
   add: "Add",
@@ -163,6 +175,13 @@ const en: Strings = {
   hiddenNoLogin: "not found or not logged in",
   restore: "Restore",
   restoreFailed: "Could not restore.",
+  moveAllChats: "Move all chats here",
+  moveAllConfirm: "Press again to move",
+  moveAllRunning: "Moving…",
+  moveAllDone: "Moved {moved}",
+  moveAllBusy: "{skipped} busy",
+  moveAllFailed: "{failed} failed",
+  moveAllError: "Could not move",
 };
 
 const ru: Strings = {
@@ -193,11 +212,10 @@ const ru: Strings = {
   currentAccount: "Этот чат идёт на",
   switchTo: "Переключиться на",
   pillNotLoggedIn: "Не залогинен",
-  switching: "Переключаю…",
   switchPaseoMissing: "Не нашёл команду paseo, чтобы перезапустить сессию",
   switchMissingDirectory: "Директории этого аккаунта больше нет",
   switchUnsupportedProvider: "Этот аккаунт для провайдера, который плагин пока не ведёт",
-  switchNoToken: "Для этого аккаунта переключение ещё не разрешено",
+  switchNoToken: "У этого аккаунта ещё нет ключа переключения",
   switchNotLoggedIn: "В директорию этого аккаунта ещё никто не вошёл",
   switchUnknownAccount: "Этого аккаунта больше нет в списке",
   switchBusy: "Это прервёт текущий ход. Нажми ещё раз, чтобы всё равно переключиться.",
@@ -210,10 +228,10 @@ const ru: Strings = {
   pillEmptyTitle: "Аккаунтов пока нет",
   pillEmptyDetail: "Сначала добавь в разделе «Аккаунты».",
   noTokenYet: "Переключение ещё не разрешено",
-  noTokenTap: "нажми, чтобы разрешить переключение",
+  noTokenTap: "нажми, чтобы выпустить ключ",
   tokenReady: "Переключаемый",
-  mintToken: "Разрешить переключение",
-  mintOpened: "Открыл терминал. Подтверди в браузере и возвращайся: список обновится сам. Если терминал попросит код, вставь тот, что покажет браузер.",
+  mintToken: "Выпустить ключ",
+  mintTokenAgain: "Обновить ключ",
   mintFailed: "Не удалось запустить разрешение переключения.",
   addAccount: "Добавить аккаунт",
   add: "Добавить",
@@ -244,6 +262,13 @@ const ru: Strings = {
   hiddenNoLogin: "не найдена или без входа",
   restore: "Вернуть",
   restoreFailed: "Не удалось вернуть.",
+  moveAllChats: "Перевести все чаты сюда",
+  moveAllConfirm: "Нажми ещё раз",
+  moveAllRunning: "Перевожу…",
+  moveAllDone: "Переведено: {moved}",
+  moveAllBusy: "занято: {skipped}",
+  moveAllFailed: "ошибок: {failed}",
+  moveAllError: "Не вышло",
 };
 
 const uk: Strings = {
@@ -274,11 +299,10 @@ const uk: Strings = {
   currentAccount: "Цей чат іде на",
   switchTo: "Перемкнутися на",
   pillNotLoggedIn: "Не залогінений",
-  switching: "Перемикаю…",
   switchPaseoMissing: "Не знайшов команду paseo, щоб перезапустити сесію",
   switchMissingDirectory: "Директорії цього акаунта більше немає",
   switchUnsupportedProvider: "Цей акаунт для провайдера, якого плагін поки не веде",
-  switchNoToken: "Для цього акаунта перемикання ще не дозволено",
+  switchNoToken: "У цього акаунта ще немає ключа перемикання",
   switchNotLoggedIn: "До директорії цього акаунта ще ніхто не увійшов",
   switchUnknownAccount: "Цього акаунта більше немає у списку",
   switchBusy: "Це перерве поточний хід. Натисни ще раз, щоб усе одно перемкнути.",
@@ -291,10 +315,10 @@ const uk: Strings = {
   pillEmptyTitle: "Акаунтів поки немає",
   pillEmptyDetail: "Спочатку додай у розділі «Акаунти».",
   noTokenYet: "Перемикання ще не дозволено",
-  noTokenTap: "натисни, щоб дозволити перемикання",
+  noTokenTap: "натисни, щоб випустити ключ",
   tokenReady: "Перемикається",
-  mintToken: "Дозволити перемикання",
-  mintOpened: "Відкрив термінал. Підтверди в браузері й повертайся: список оновиться сам. Якщо термінал попросить код, встав той, що покаже браузер.",
+  mintToken: "Випустити ключ",
+  mintTokenAgain: "Оновити ключ",
   mintFailed: "Не вдалося запустити дозвіл перемикання.",
   addAccount: "Додати акаунт",
   add: "Додати",
@@ -325,6 +349,13 @@ const uk: Strings = {
   hiddenNoLogin: "не знайдена або без входу",
   restore: "Повернути",
   restoreFailed: "Не вдалося повернути.",
+  moveAllChats: "Перевести всі чати сюди",
+  moveAllConfirm: "Натисни ще раз",
+  moveAllRunning: "Переводжу…",
+  moveAllDone: "Переведено: {moved}",
+  moveAllBusy: "зайнято: {skipped}",
+  moveAllFailed: "помилок: {failed}",
+  moveAllError: "Не вдалося",
 };
 
 /** Maps a locale tag to a catalogue entry: `ru-RU`, `ru` and `ru_RU.UTF-8` all give `ru`. */

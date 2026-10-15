@@ -18,6 +18,13 @@ export interface Account {
    * authorises whoever is signed in to the browser, so the two can differ.
    */
   tokenLogin?: string;
+  /**
+   * The organisation the minted token bills, from the API's answer when the token was
+   * checked. One email can hold several organisations (a personal plan and a Team seat),
+   * each with its own allowance, so the Keychain item is keyed on both. Absent for tokens
+   * minted before this was recorded, and when the API did not say.
+   */
+  tokenOrg?: string;
 }
 
 export interface Registry {
@@ -40,6 +47,7 @@ export const accountSchema = z.object({
   provider: z.string().refine(isProviderId),
   home: z.string().min(1),
   tokenLogin: z.string().optional(),
+  tokenOrg: z.string().optional(),
 });
 
 const stored = z.object({
@@ -57,6 +65,14 @@ const stored = z.object({
 export function parseRegistry(raw: unknown): Registry | null {
   const parsed = stored.safeParse(raw);
   return parsed.success ? (parsed.data as Registry) : null;
+}
+
+/** The Keychain account an account's minted token is filed under, or null when it has
+ *  none: `<login>/<organisation>`, or the bare login for a token minted before the
+ *  organisation was recorded. */
+export function tokenKey(account: Pick<Account, "tokenLogin" | "tokenOrg">): string | null {
+  if (account.tokenLogin === undefined || account.tokenLogin === "") return null;
+  return account.tokenOrg ? `${account.tokenLogin}/${account.tokenOrg}` : account.tokenLogin;
 }
 
 export function accountById(registry: Registry, id: string): Account | null {

@@ -5,7 +5,8 @@ import { KeychainTimeout, killedByTimeout } from "./keychain.ts";
 const execFileAsync = promisify(execFile);
 
 /**
- * The Keychain service holding the tokens this plugin minted, one item per login. Separate
+ * The Keychain service holding the tokens this plugin minted, one item per login and
+ * organisation (see `tokenKey`). Separate
  * from Claude Code's own `Claude Code-credentials*` items, which belong to their config
  * directories and must never be overwritten.
  */

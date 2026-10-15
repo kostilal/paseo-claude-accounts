@@ -47,6 +47,36 @@ test("a bound account contributes its token and no directory", async () => {
   assert.deepEqual(env, { PATH: "/bin", CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat01-example" });
 });
 
+test("two accounts on one email in different organisations each read their own token", async () => {
+  // A personal plan and a Team seat share the address; each has its own Keychain item.
+  const personal = { ...work, id: "personal", tokenLogin: "alice@example.com", tokenOrg: "org-personal" };
+  const team = { ...work, id: "team", home: "/w/team/.claude-data", tokenLogin: "alice@example.com", tokenOrg: "org-team" };
+  const items: Record<string, string> = {
+    "alice@example.com/org-personal": "sk-ant-oat01-personal",
+    "alice@example.com/org-team": "sk-ant-oat01-team",
+  };
+  const env = async (agentId: string) =>
+    sessionEnv(request({ agentId }), {
+      readRegistry: async () => registry({ accounts: [personal, team], agents: { p: "personal", t: "team" } }),
+      readMintedToken: async (key) => items[key] ?? null,
+      directoryExists: async () => true,
+    });
+  assert.equal((await env("p"))?.CLAUDE_CODE_OAUTH_TOKEN, "sk-ant-oat01-personal");
+  assert.equal((await env("t"))?.CLAUDE_CODE_OAUTH_TOKEN, "sk-ant-oat01-team");
+});
+
+test("a token minted before organisations were recorded is still read under the bare email", async () => {
+  const asked: string[] = [];
+  await sessionEnv(request(), {
+    ...deps({ token: "sk-ant-oat01-example" }),
+    readMintedToken: async (key) => {
+      asked.push(key);
+      return "sk-ant-oat01-example";
+    },
+  });
+  assert.deepEqual(asked, ["alice@example.com"]);
+});
+
 test("an account with no token login recorded leaves the session alone", async () => {
   const env = await sessionEnv(
     { agentId: "a1", workspaceId: "w1", provider: "claude", cwd: "/w/acme", env: { PATH: "/bin" } },
