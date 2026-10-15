@@ -31,6 +31,7 @@ import { createMints } from "./server/mintTerminal.ts";
 import { readMintedToken, writeMintedToken } from "./server/mintedToken.ts";
 import { createOverview, createUsageRow } from "./server/overview.ts";
 import { pillStateFor } from "./server/pill.ts";
+import { createSessionDirs } from "./server/sessionDir.ts";
 import { createProjects } from "./server/projects.ts";
 import { reloadAgent } from "./server/reload.ts";
 import { MINTS_DIR, STATE_FILE, loadRegistry, readRegistry, writeRegistry } from "./server/store.ts";
@@ -46,11 +47,23 @@ export default function contribute(server: PluginServerContext) {
   const discovery = createDiscovery();
   const log = (line: string) => console.error(line);
   const overridingVar = createApiKeyCheck();
+  const sessionDir = createSessionDirs();
 
   /** Where a chat that nobody has switched runs: the config directory the daemon would
    *  hand Claude Code, which is `~/.claude` unless the daemon itself was started with
    *  `CLAUDE_CONFIG_DIR` set. */
   const unboundDir = () => process.env.CLAUDE_CONFIG_DIR || defaultDir();
+
+  /** The config directory a chat runs in when nobody has switched it: what its running
+   *  process says, else a guess from its working directory, else the daemon's default. */
+  async function homeOfChat(agentId: string, cwd: string): Promise<string> {
+    const live = await sessionDir(agentId);
+    if (live.found) {
+      if (live.configDir === null) return defaultDir();
+      if (await directoryExists(live.configDir)) return canonical(live.configDir);
+    }
+    return (await jobDirFor(cwd)) ?? unboundDir();
+  }
 
   const persist = (registry: Registry) => writeRegistry(registry, STATE_FILE, log);
 
@@ -231,7 +244,7 @@ export default function contribute(server: PluginServerContext) {
       { agentId: input.agentId, cwd: input.cwd, manual: input.manual },
       {
         readRegistry,
-        projectHome: async () => (await jobDirFor(input.cwd)) ?? unboundDir(),
+        projectHome: () => homeOfChat(input.agentId, input.cwd),
         identify: (home) => discovery.identify(home),
         authorised: (home) => usage.authorised(home),
         usageFor: async (home, manual) => {
