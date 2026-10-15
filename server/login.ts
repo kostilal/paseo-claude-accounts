@@ -1,4 +1,4 @@
-import type { PaseoApi } from "@getpaseo/client";
+import type { PaseoApi } from "./paseo.ts";
 import type { ProviderId } from "../shared/providers.ts";
 import { SHELL_CONFIG_DIR, findClaude, shellDirArg } from "./claude.ts";
 import { type TerminalResult, openTerminal } from "./terminal.ts";

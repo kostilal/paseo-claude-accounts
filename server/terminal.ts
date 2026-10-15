@@ -1,4 +1,4 @@
-import type { PaseoApi } from "@getpaseo/client";
+import type { PaseoApi } from "./paseo.ts";
 
 export type TerminalResult = { terminal: string; code: "" | "no-workspace"; error: string };
 

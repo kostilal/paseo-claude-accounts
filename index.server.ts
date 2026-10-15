@@ -1,4 +1,4 @@
-import type { PaseoApi } from "@getpaseo/client";
+import type { PaseoApi } from "./server/paseo.ts";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { execFile } from "node:child_process";
 import { mkdir, stat } from "node:fs/promises";

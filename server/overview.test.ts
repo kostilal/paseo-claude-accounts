@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { PaseoApi } from "@getpaseo/client";
+import type { PaseoApi } from "./paseo.ts";
 import type { AccountView } from "../shared/accounts.ts";
 import { loginKey, loginLabel } from "../shared/identity.ts";
 import { claudeNotFound } from "./discover.ts";

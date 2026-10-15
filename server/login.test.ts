@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { PaseoApi, PaseoTerminalCreateOptions } from "@getpaseo/client";
+import type { PaseoApi, PaseoTerminalCreateOptions } from "./paseo.ts";
 import { SHELL_CONFIG_DIR } from "./claude.ts";
 import { CLAUDE_LOGIN_SCRIPT, CODEX_LOGIN_SCRIPT, openLogin } from "./login.ts";
 

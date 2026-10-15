@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PaseoApi, PaseoTerminalCreateOptions } from "@getpaseo/client";
+import type { PaseoApi, PaseoTerminalCreateOptions } from "./paseo.ts";
 import { SHELL_CONFIG_DIR } from "./claude.ts";
 import type { FinishResult } from "./mint.ts";
 import { MINT_SCRIPT, createMints } from "./mintTerminal.ts";

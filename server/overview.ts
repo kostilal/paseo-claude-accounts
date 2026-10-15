@@ -1,4 +1,4 @@
-import type { PaseoApi } from "@getpaseo/client";
+import type { PaseoApi } from "./paseo.ts";
 import type { AccountView, Overview } from "../shared/accounts.ts";
 import { loginKey } from "../shared/identity.ts";
 import type { Identity } from "../shared/parse.ts";

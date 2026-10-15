@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { PaseoApi } from "@getpaseo/client";
+import type { PaseoApi } from "./paseo.ts";
 import type { Registry } from "../shared/registry.ts";
 import { type SessionRequest, sessionEnv } from "./hook.ts";
 
