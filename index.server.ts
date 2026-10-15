@@ -21,6 +21,7 @@ import { PROVIDERS, type ProviderId, isProviderId, providerForHome } from "./sha
 import { type Registry, accountById, registerAccount, removeAccounts, unhideHomes } from "./shared/registry.ts";
 import { preferences } from "./shared/settings.ts";
 import { pillStateRpc, switchAccountRpc } from "./shared/switch.ts";
+import { createApiKeyCheck } from "./server/apiKey.ts";
 import { claudeEnv, findClaude } from "./server/claude.ts";
 import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } from "./server/discover.ts";
 import { directoryExists, sessionEnv } from "./server/hook.ts";
@@ -44,6 +45,7 @@ export default function contribute(server: PluginServerContext) {
   const usage = createUsage();
   const discovery = createDiscovery();
   const log = (line: string) => console.error(line);
+  const overridingVar = createApiKeyCheck();
 
   /** Where a chat that nobody has switched runs: the config directory the daemon would
    *  hand Claude Code, which is `~/.claude` unless the daemon itself was started with
@@ -122,7 +124,8 @@ export default function contribute(server: PluginServerContext) {
 
   server.handle(listAccounts, async (input, { paseo }) => {
     await adopt();
-    return overviewFor(paseo, input.refresh, input.force);
+    const [overview, override] = await Promise.all([overviewFor(paseo, input.refresh, input.force), overridingVar(paseo)]);
+    return { ...overview, overridingVar: override };
   });
 
   server.handle(fetchUsage, async (input, { paseo }) => {
@@ -221,9 +224,10 @@ export default function contribute(server: PluginServerContext) {
     );
   });
 
-  server.handle(pillStateRpc, async (input) => {
+  server.handle(pillStateRpc, async (input, { paseo }) => {
     await adopt();
-    return pillStateFor(
+    const override = await overridingVar(paseo);
+    const state = await pillStateFor(
       { agentId: input.agentId, cwd: input.cwd, manual: input.manual },
       {
         readRegistry,
@@ -237,6 +241,7 @@ export default function contribute(server: PluginServerContext) {
         },
       },
     );
+    return { ...state, overridingVar: override };
   });
 
   server.before("agent.session_open", async (input) => {

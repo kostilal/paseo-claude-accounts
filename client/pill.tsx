@@ -238,6 +238,9 @@ export function AccountPopover(props: PluginButtonContentProps) {
         <>
           {isError && loadFailedBanner}
           {data.error === "claude-not-found" && <Banner theme={theme} tone="bad" text={strings.claudeNotFound} />}
+          {data.overridingVar !== "" && (
+            <Banner theme={theme} tone="bad" text={strings.apiKeyOverride.replace("{var}", data.overridingVar)} />
+          )}
           {ordered.length === 0 ? (
             <EmptyState theme={theme} icon="Users" title={strings.pillEmptyTitle} detail={strings.pillEmptyDetail} />
           ) : (

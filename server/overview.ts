@@ -188,6 +188,7 @@ export function createOverview(deps: OverviewDeps) {
       accounts: withUsage,
       hidden: hiddenRows,
       error: identified === null ? ("claude-not-found" as const) : ("" as const),
+      overridingVar: "",
     };
   };
 }

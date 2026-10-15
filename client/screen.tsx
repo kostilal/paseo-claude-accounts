@@ -409,6 +409,9 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
             />
           )}
           {data.error === "claude-not-found" && <Banner theme={theme} tone="bad" text={strings.claudeNotFound} />}
+          {data.overridingVar !== "" && (
+            <Banner theme={theme} tone="bad" text={strings.apiKeyOverride.replace("{var}", data.overridingVar)} />
+          )}
 
           {registered.length === 0 ? (
             <Card theme={theme}>

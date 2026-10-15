@@ -3,7 +3,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { UsageState } from "../shared/accounts.ts";
 import { type Bar, parseUsage } from "../shared/parse.ts";
-import { findClaude } from "./claude.ts";
+import { tmpdir } from "node:os";
+import { claudeEnv, findClaude } from "./claude.ts";
 import { serviceName } from "../shared/service.ts";
 import { type Credential, KeychainTimeout, NO_TOKEN, readCredential } from "./keychain.ts";
 
@@ -22,6 +23,9 @@ const EXPIRED_FRESH_FOR_MS = 25_000;
 /** Minimum age before Reload repeats a reading that cost a request: the endpoint answers
  *  rapid polling with a 429 and a long wait. */
 const FORCE_FLOOR_MS = 60_000;
+/** How often one directory's expired token may be refreshed. */
+const REFRESH_COOLDOWN_MS = 15 * 60 * 1000;
+const REFRESH_TIMEOUT_MS = 30_000;
 
 export interface UsageResult {
   state: UsageState;
@@ -34,6 +38,8 @@ export interface UsageDeps {
   readCredential(service: string, timeoutMs: number | null): Promise<Credential>;
   request(token: string, userAgent: string): Promise<Response>;
   version(): Promise<string>;
+  /** Has Claude Code refresh the access token stored for `dir`. */
+  refresh?(dir: string): Promise<void>;
   now?(): number;
 }
 
@@ -68,6 +74,17 @@ const liveDeps: UsageDeps = {
       signal: timeoutSignal(REQUEST_TIMEOUT_MS),
     }),
   version: claudeVersion,
+  // `/usage` is a local command: no model turn, no cost, but Claude Code refreshes its own
+  // token first and writes it back to its own Keychain item. Refreshing through Claude Code
+  // rather than with the refresh token directly avoids racing it over a rotating token.
+  // No settings are loaded and nothing is saved, so the user's hooks and plugins stay out.
+  refresh: async (dir) => {
+    await run(
+      await findClaude(),
+      ["-p", "/usage", "--no-session-persistence", "--setting-sources", "local", "--output-format", "json"],
+      { env: claudeEnv(dir), cwd: tmpdir(), timeout: REFRESH_TIMEOUT_MS },
+    );
+  },
 };
 
 /** Whether a failed Keychain read only means there is nothing there yet (no item: `security`
@@ -99,15 +116,31 @@ interface Entry {
 export function createUsage(deps: UsageDeps = liveDeps) {
   const authorisedDirs = new Set<string>();
   const cache = new Map<string, Entry>();
+  const refreshedAt = new Map<string, number>();
+
+  /** A fresh credential after a refresh, or null when none is allowed yet or it did not help. */
+  async function refreshed(dir: string, service: string, timeoutMs: number | null): Promise<Credential | null> {
+    const now = (deps.now ?? Date.now)();
+    if (deps.refresh === undefined || now - (refreshedAt.get(dir) ?? -Infinity) < REFRESH_COOLDOWN_MS) return null;
+    refreshedAt.set(dir, now);
+    try {
+      await deps.refresh(dir);
+      const credential = await deps.readCredential(service, timeoutMs);
+      return credential.expiresAt !== null && credential.expiresAt <= (deps.now ?? Date.now)() ? null : credential;
+    } catch {
+      return null;
+    }
+  }
 
   /** `manual`: a person pressed the button and waits for the Keychain dialog. Otherwise the
    *  read gets three seconds, and a timeout means a dialog is up. */
   async function measure(dir: string, defaultDir: string, manual: boolean): Promise<UsageResult> {
     const now = deps.now ?? Date.now;
     const timeoutMs = manual ? null : BACKGROUND_TIMEOUT_MS;
+    const service = await serviceName(dir, defaultDir);
     let credential: Credential;
     try {
-      credential = await deps.readCredential(await serviceName(dir, defaultDir), timeoutMs);
+      credential = await deps.readCredential(service, timeoutMs);
     } catch (error) {
       if (error instanceof KeychainTimeout) {
         authorisedDirs.delete(dir);
@@ -122,17 +155,28 @@ export function createUsage(deps: UsageDeps = liveDeps) {
     }
 
     authorisedDirs.add(dir);
-    // Known expired without asking: the endpoint is rate-limited.
+    // Known expired without asking the rate-limited endpoint. Claude Code only refreshes a
+    // token while it runs in that directory, so a directory nobody uses expires within hours.
     if (credential.expiresAt !== null && credential.expiresAt <= now()) {
+      const fresh = await refreshed(dir, service, timeoutMs);
+      if (fresh !== null) return read(dir, fresh, service, timeoutMs);
       const result = blank("expired");
       cache.set(dir, { at: now(), result, freshFor: EXPIRED_FRESH_FOR_MS, onForce: "retake" });
       return result;
     }
+    return read(dir, credential, service, timeoutMs);
+  }
+
+  /** Asks the endpoint with a credential, refreshing once on a 401. */
+  async function read(dir: string, credential: Credential, service: string, timeoutMs: number | null): Promise<UsageResult> {
+    const now = deps.now ?? Date.now;
     let result: UsageResult;
     let onForce: Entry["onForce"] = "floor";
     try {
       const response = await deps.request(credential.token, await deps.version());
       if (response.status === 401) {
+        const fresh = await refreshed(dir, service, timeoutMs);
+        if (fresh !== null) return read(dir, fresh, service, timeoutMs);
         result = blank("expired");
         onForce = "retake";
       } else if (response.status === 429) {

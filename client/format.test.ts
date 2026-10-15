@@ -66,7 +66,7 @@ test("a row's usage line names the provider and the state", () => {
 });
 
 test("a spare is another account with a token and room left", () => {
-  const state = (accounts: PillAccount[]): PillState => ({ currentId: "x", tightest: 100, accounts, error: "" });
+  const state = (accounts: PillAccount[]): PillState => ({ currentId: "x", tightest: 100, accounts, error: "", overridingVar: "" });
   assert.equal(hasSpare(state([account({ current: true }), account({ hasToken: true })])), true);
   assert.equal(hasSpare(state([account({ current: true }), account({ hasToken: false })])), false);
   assert.equal(

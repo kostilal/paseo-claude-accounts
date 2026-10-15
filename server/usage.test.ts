@@ -256,3 +256,70 @@ test("Reload retakes a Keychain read that failed outright, so a login made since
   assert.equal(usage.stale(DIR), false);
   assert.equal(usage.stale(DIR, true), true);
 });
+
+// --- refreshing an expired token through Claude Code -----------------------------------
+
+const ok = () => body(200, { five_hour: { utilization: 12, resets_at: "x" } });
+
+test("an expired token is refreshed through Claude Code, then read", async () => {
+  let refreshes = 0;
+  let expiresAt = 1_000;
+  const usage = createUsage({
+    readCredential: async () => ({ token: refreshes > 0 ? "fresh" : "stale", expiresAt }),
+    request: async (token) => (token === "fresh" ? ok() : body(401, {})),
+    version: async () => "2",
+    refresh: async () => {
+      refreshes += 1;
+      expiresAt = 10_000_000;
+    },
+    now: () => 5_000,
+  });
+  const result = await usage.measure(DIR, HOME, false);
+  assert.equal(result.state, "ok");
+  assert.equal(refreshes, 1);
+});
+
+test("a refresh that does not help leaves the reading expired, and is not repeated at once", async () => {
+  let refreshes = 0;
+  let clock = 5_000;
+  const usage = createUsage({
+    readCredential: async () => ({ token: "stale", expiresAt: 1_000 }),
+    request: async () => ok(),
+    version: async () => "2",
+    refresh: async () => {
+      refreshes += 1;
+    },
+    now: () => clock,
+  });
+  assert.equal((await usage.measure(DIR, HOME, false)).state, "expired");
+  clock += 60_000;
+  assert.equal((await usage.measure(DIR, HOME, false)).state, "expired");
+  assert.equal(refreshes, 1);
+  clock += 15 * 60_000;
+  await usage.measure(DIR, HOME, false);
+  assert.equal(refreshes, 2);
+});
+
+test("a 401 refreshes once and retries", async () => {
+  let refreshes = 0;
+  const usage = createUsage({
+    readCredential: async () => ({ token: refreshes > 0 ? "fresh" : "stale", expiresAt: null }),
+    request: async (token) => (token === "fresh" ? ok() : body(401, {})),
+    version: async () => "2",
+    refresh: async () => {
+      refreshes += 1;
+    },
+  });
+  assert.equal((await usage.measure(DIR, HOME, false)).state, "ok");
+  assert.equal(refreshes, 1);
+});
+
+test("a failing refresh is reported as expired, not as an error", async () => {
+  const usage = createUsage({
+    readCredential: async () => ({ token: "stale", expiresAt: null }),
+    request: async () => body(401, {}),
+    version: async () => "2",
+    refresh: async () => Promise.reject(new Error("claude failed")),
+  });
+  assert.equal((await usage.measure(DIR, HOME, false)).state, "expired");
+});

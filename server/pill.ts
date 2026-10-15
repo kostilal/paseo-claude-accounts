@@ -130,6 +130,7 @@ export async function pillStateFor(input: PillInput, deps: PillDeps): Promise<Pi
   return {
     currentId: current?.id ?? "",
     error: claudeMissing ? ("claude-not-found" as const) : ("" as const),
+    overridingVar: "",
     tightest:
       currentRow === null
         ? null

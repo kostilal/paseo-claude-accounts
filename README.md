@@ -10,6 +10,11 @@ composer: the session restarts on that account and the conversation carries on.
   login buttons and "Add account".
 - **Per chat.** A switch moves one chat. Other chats, even in the same project, stay where they are.
 
+<p>
+  <img src="assets/pill.png" alt="The account pill and its popover above a chat composer" width="400">
+  <img src="assets/accounts-screen.png" alt="The Accounts screen with usage bars for each login" width="400">
+</p>
+
 ## Requirements
 
 - macOS (tokens and usage credentials live in the login Keychain)
@@ -67,7 +72,11 @@ If the restart fails, the choice is rolled back, so the pill never shows an acco
 actually running on.
 
 **Usage meters** come from the same endpoint Claude Code uses, called with each config directory's
-own Claude Code credentials from the Keychain. Nothing is read in the background until you press
+own Claude Code credentials from the Keychain. Claude Code only refreshes those credentials while
+it runs in that directory, so for a directory nobody uses they expire within hours; when that
+happens the plugin runs `claude -p /usage` there (a local command: no model call, no hooks, no
+saved session), which makes Claude Code refresh its own token, at most every 15 minutes per
+directory. Nothing is read in the background until you press
 **Show usage** for an account once; at that point macOS asks for Keychain access, and "Always
 Allow" makes it stick. After that, readings refresh at most every ten minutes. Background reads
 give up after three seconds if a Keychain dialog appears, so they never leave a prompt waiting.
@@ -104,8 +113,11 @@ In Paseo's settings, under **Accounts**:
   directory is signed in as still works, but the meter shows the directory's account.
 - **Revoked tokens are not detected in advance.** A chat switched to one fails on its next turn;
   run **Enable switching** again for that account.
-- **API keys win.** If `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` is set in the environment
-  Paseo starts Claude Code with, Claude Code uses it instead of the account token.
+- **API keys win.** If `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` or
+  `CLAUDE_CODE_USE_VERTEX` is set in the environment Paseo starts Claude Code with, Claude Code
+  ignores the account token. The plugin shows a warning when it finds one in the daemon's
+  environment or in Paseo's Claude provider settings; a key exported by a custom launch command
+  cannot be detected.
 - **Codex** (`~/.codex`, `~/.codex-*`) is supported by pointing the chat at another `CODEX_HOME`.
   Codex has no readable usage endpoint, so its rows have no meter. Paseo has to be restarted after
   installing the Codex CLI before it offers Codex chats.

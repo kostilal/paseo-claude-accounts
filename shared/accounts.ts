@@ -64,6 +64,9 @@ export const overview = z.object({
   hidden: z.array(hiddenView).default([]),
   /** `claude-not-found`: no `claude` command, so no directory could be identified. */
   error: z.enum(["", "claude-not-found"]).default(""),
+  /** A variable such as `ANTHROPIC_API_KEY` that makes Claude Code ignore the account
+   *  token, so switching has no effect; "" when there is none. */
+  overridingVar: z.string().default(""),
 });
 
 export type Bar = z.output<typeof bar>;

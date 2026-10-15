@@ -23,6 +23,8 @@ export interface Strings {
   usageUnknownAccount: string;
   usageReadFailed: string;
   claudeNotFound: string;
+  /** `{var}` is replaced with the variable's name. */
+  apiKeyOverride: string;
   pillNoAccount: string;
   currentAccount: string;
   switchTo: string;
@@ -99,12 +101,13 @@ const en: Strings = {
   limitExhausted: "limit reached",
   limitNearly: "almost out",
   spareAvailable: "Another account has allowance left",
-  usageExpired: "The session token in this directory has expired; it refreshes the next time Claude runs there.",
+  usageExpired: "The session token in this directory has expired and could not be refreshed. Log in again if this does not clear.",
   noUsageAllowance: "This plan has no usage limit to show.",
   usageUnsupported: "allowance not readable for this provider",
   usageUnknownAccount: "This account no longer exists.",
   usageReadFailed: "Could not read usage.",
   claudeNotFound: "The claude command could not be found, so no account could be checked. Install Claude Code, or start Paseo from a terminal.",
+  apiKeyOverride: "{var} is set in Paseo's environment, so Claude Code uses it instead of the account picked here. Remove it for switching to take effect.",
   pillNoAccount: "No account",
   currentAccount: "This chat runs on",
   switchTo: "Switch to",
@@ -179,12 +182,13 @@ const ru: Strings = {
   limitExhausted: "лимит выбран",
   limitNearly: "почти выбран",
   spareAvailable: "Есть аккаунт с запасом",
-  usageExpired: "Токен сессии в этой директории истёк; обновится, когда Claude там снова поработает.",
+  usageExpired: "Токен сессии в этой директории истёк, и обновить его не вышло. Если это не пройдёт само, залогинься заново.",
   noUsageAllowance: "Для этого плана лимит не отображается.",
   usageUnsupported: "остаток по этому провайдеру не читается",
   usageUnknownAccount: "Этого аккаунта больше нет.",
   usageReadFailed: "Не удалось прочитать лимиты.",
   claudeNotFound: "Не нашёл команду claude, поэтому ни один аккаунт не проверен. Установи Claude Code или запусти Paseo из терминала.",
+  apiKeyOverride: "В окружении Paseo задан {var}, поэтому Claude Code использует его, а не выбранный здесь аккаунт. Убери его, чтобы переключение работало.",
   pillNoAccount: "Без аккаунта",
   currentAccount: "Этот чат идёт на",
   switchTo: "Переключиться на",
@@ -259,12 +263,13 @@ const uk: Strings = {
   limitExhausted: "ліміт вичерпано",
   limitNearly: "майже вичерпано",
   spareAvailable: "Є акаунт із запасом",
-  usageExpired: "Токен сесії в цій директорії минув; оновиться, коли Claude там знову попрацює.",
+  usageExpired: "Токен сесії в цій директорії минув, і оновити його не вдалося. Якщо це не мине саме, залогінься знову.",
   noUsageAllowance: "Для цього плану ліміт не відображається.",
   usageUnsupported: "залишок для цього провайдера не читається",
   usageUnknownAccount: "Цього акаунта більше немає.",
   usageReadFailed: "Не вдалося прочитати ліміти.",
   claudeNotFound: "Не знайшов команду claude, тому жоден акаунт не перевірено. Встанови Claude Code або запусти Paseo з термінала.",
+  apiKeyOverride: "В оточенні Paseo задано {var}, тому Claude Code використовує його, а не обраний тут акаунт. Прибери його, щоб перемикання працювало.",
   pillNoAccount: "Без акаунта",
   currentAccount: "Цей чат іде на",
   switchTo: "Перемкнутися на",

@@ -20,10 +20,10 @@ Each account you want to switch to needs a long-lived token, created once with `
 
 - Account list and chat bindings: `~/.paseo-claude-accounts/accounts.json`. No secrets.
 - Tokens: the Keychain, service `paseo-claude-accounts`, one item per login. Tokens are never written to the state file, logs or the app.
-- Usage: Anthropic's usage endpoint, called with each config directory's own Claude Code credentials, at most every ten minutes per account.
+- Usage: Anthropic's usage endpoint, called with each config directory's own Claude Code credentials, at most every ten minutes per account. When those credentials have expired, the plugin runs `claude -p /usage` in that directory so Claude Code refreshes them itself; this makes no model call.
 
 ## Limits
 
 - A token from `setup-token` cannot read usage, so meters come from a config directory signed in to the same account. An account with a token but no signed-in directory switches fine but shows no meter.
-- If `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` is set in Paseo's environment, Claude Code uses it instead of the account token.
+- If `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or a cloud provider variable is set in Paseo's environment, Claude Code uses it instead of the account token. The plugin warns when it can see one.
 - Codex accounts (`~/.codex*`) can be switched too, by pointing the chat at another `CODEX_HOME`. Codex has no readable usage meter.

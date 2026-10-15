@@ -75,6 +75,8 @@ export const pillState = z.object({
   /** `claude-not-found`: no directory could be identified, so every row reads logged out
    *  for that reason rather than because nobody is logged in. */
   error: z.enum(["", "claude-not-found"]).default(""),
+  /** See `overview.overridingVar`. */
+  overridingVar: z.string().default(""),
 });
 
 export type PillAccount = z.output<typeof pillAccount>;
