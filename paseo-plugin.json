@@ -1,0 +1,6 @@
+{
+  "id": "claude-accounts",
+  "name": "Claude Accounts",
+  "description": "Switch the Claude account a chat runs on, without losing the conversation, and see how much allowance each account has left.",
+  "requirements": { "paseo": ">=0.11.0" }
+}
