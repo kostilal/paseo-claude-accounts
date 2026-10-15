@@ -14,7 +14,7 @@ Each account you want to switch to needs a long-lived token, created once with `
 - macOS. Tokens and usage credentials are read from the login Keychain.
 - Claude Code installed and logged in at least once.
 - Accounts are config directories: `~/.claude`, any `~/.claude-*` directory you use with `CLAUDE_CONFIG_DIR`, and per-project `.claude-data` directories. "Add account" creates a new one and opens `claude auth login` for it.
-- The first time you press "Show usage" for an account, macOS asks whether Paseo may read Claude Code's Keychain item. Choose "Always Allow". Background refreshes never trigger this dialog.
+- Usage is read from Claude Code's Keychain item for each account. Until macOS allows that, background reads give up after three seconds and the account shows "Show usage". Press it once and choose "Always Allow" in the macOS dialog.
 
 ## What it reads and stores
 

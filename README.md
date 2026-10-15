@@ -76,10 +76,10 @@ own Claude Code credentials from the Keychain. Claude Code only refreshes those 
 it runs in that directory, so for a directory nobody uses they expire within hours; when that
 happens the plugin runs `claude -p /usage` there (a local command: no model call, no hooks, no
 saved session), which makes Claude Code refresh its own token, at most every 15 minutes per
-directory. Nothing is read in the background until you press
-**Show usage** for an account once; at that point macOS asks for Keychain access, and "Always
-Allow" makes it stick. After that, readings refresh at most every ten minutes. Background reads
-give up after three seconds if a Keychain dialog appears, so they never leave a prompt waiting.
+directory. The screen and the pill try to read every logged-in account in the background, at
+most every ten minutes. If macOS has not yet allowed Keychain access, a background read gives up
+after three seconds and the row shows **Show usage** instead; a dialog may flash briefly. Press
+**Show usage** once and choose "Always Allow" so later reads go through without asking.
 The endpoint rate-limits aggressively; on a 429 the last reading is kept until the wait is over.
 
 ## Files and secrets
