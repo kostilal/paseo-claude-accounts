@@ -214,7 +214,8 @@ function LoginCard({
             {detailLine(row, strings)}
           </Text>
         </View>
-        <View style={{ flexShrink: 0 }}>
+        <View style={{ flexShrink: 0, flexDirection: "row", gap: 6 }}>
+          {row.isDefault && <Chip theme={theme} label={strings.defaultAccount} />}
           {row.loggedIn && row.hasToken && <Chip theme={theme} label={strings.tokenReady} selected />}
         </View>
       </View>

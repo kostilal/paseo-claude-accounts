@@ -117,6 +117,7 @@ export function createOverview(deps: OverviewDeps) {
           PROVIDERS[landsOn?.provider ?? "claude"].switch.kind === "home"
             ? group.loggedIn
             : group.switchTo !== "" && hasToken(group.switchTo),
+        isDefault: group.accountIds.includes(registry.defaults?.[landsOn?.provider ?? "claude"] ?? ""),
         usage: "unauthorised" as const,
         fiveHour: null,
         sevenDay: null,
@@ -224,6 +225,7 @@ export function createUsageRow(deps: UsageRowDeps) {
         accountIds: [],
         switchTo: "",
         hasToken: false,
+        isDefault: false,
         usage: "error" as const,
         fiveHour: null,
         sevenDay: null,
@@ -254,6 +256,7 @@ export function createUsageRow(deps: UsageRowDeps) {
       accountIds: [],
       switchTo: "",
       hasToken: false,
+      isDefault: false,
       usage: result.state,
       fiveHour: result.fiveHour,
       sevenDay: result.sevenDay,

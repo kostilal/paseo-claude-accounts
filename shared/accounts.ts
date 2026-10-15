@@ -39,6 +39,8 @@ export const accountView = z.object({
   switchTo: z.string().default(""),
   /** Whether `switchTo` has a minted token recorded, which a token switch requires. */
   hasToken: z.boolean().default(false),
+  /** Whether new chats of this provider open on this login ("Move all chats here" chose it). */
+  isDefault: z.boolean().default(false),
   usage: usageState.default("unauthorised"),
   fiveHour: bar.nullable().default(null),
   sevenDay: bar.nullable().default(null),

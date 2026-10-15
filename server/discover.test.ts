@@ -287,6 +287,7 @@ test("a discovered row carries the directory's name and its identity", async () 
     accountIds: [],
     switchTo: "",
     hasToken: false,
+    isDefault: false,
     // Nothing is read from the Keychain until somebody asks.
     usage: "unauthorised",
     fiveHour: null,

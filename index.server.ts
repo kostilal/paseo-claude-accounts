@@ -281,6 +281,7 @@ export default function contribute(server: PluginServerContext) {
   server.before("agent.session_open", async (input) => {
     const env = await sessionEnv(input.request, {
       readRegistry,
+      writeRegistry: persist,
       readMintedToken: (login) => readMintedToken(login),
       directoryExists,
       log,

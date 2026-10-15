@@ -68,7 +68,7 @@ test("a chat in the middle of a turn is neither rebound nor restarted", async ()
   });
   const result = await switchAll("personal", fake.deps);
   assert.deepEqual(result, { code: "", moved: 0, restarted: 0, failed: 0, skipped: 2, error: "" });
-  assert.deepEqual(log, [], "nothing written and nothing restarted");
+  assert.deepEqual(log, ["write"], "only the default is recorded; nothing restarted");
   assert.equal(fake.stored().agents.busy, "work");
 });
 
@@ -132,11 +132,29 @@ test("a chat the daemon lists but has not loaded keeps its new binding, like a c
   assert.equal(fake.stored().agents.idle, "personal");
 });
 
-test("no chats of the provider writes nothing", async () => {
+test("no chats of the provider still records the default, and restarts nothing", async () => {
   const log: string[] = [];
-  const result = await switchAll("personal", deps(log, { chats: async () => [] }).deps);
+  const fake = deps(log, { chats: async () => [] });
+  const result = await switchAll("personal", fake.deps);
   assert.deepEqual(result, { code: "", moved: 0, restarted: 0, failed: 0, skipped: 0, error: "" });
-  assert.deepEqual(log, []);
+  assert.deepEqual(log, ["write"]);
+  assert.deepEqual(fake.stored().defaults, { claude: "personal" });
+});
+
+test("the account becomes its provider's default, other providers' defaults stay", async () => {
+  const log: string[] = [];
+  const fake = deps(log);
+  const before = await fake.deps.readRegistry();
+  await fake.deps.writeRegistry({ ...before, defaults: { codex: "codex", claude: "work" } });
+  await switchAll("personal", fake.deps);
+  assert.deepEqual(fake.stored().defaults, { codex: "codex", claude: "personal" });
+});
+
+test("a refused move leaves the default alone", async () => {
+  const log: string[] = [];
+  const fake = deps(log);
+  await switchAll("work", fake.deps);
+  assert.equal(fake.stored().defaults, undefined);
 });
 
 test("restarts run a few at a time, not all at once", async () => {

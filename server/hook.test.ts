@@ -34,6 +34,7 @@ function request(overrides: Partial<SessionRequest> = {}): SessionRequest {
 function deps(options: { token: string | null }) {
   return {
     readRegistry: async () => registry({ accounts: [{ ...work, tokenLogin: "alice@example.com" }] }),
+    writeRegistry: async () => {},
     readMintedToken: async () => options.token,
     directoryExists: async () => true,
   } as unknown as Parameters<typeof sessionEnv>[1];
@@ -58,6 +59,7 @@ test("two accounts on one email in different organisations each read their own t
   const env = async (agentId: string) =>
     sessionEnv(request({ agentId }), {
       readRegistry: async () => registry({ accounts: [personal, team], agents: { p: "personal", t: "team" } }),
+      writeRegistry: async () => {},
       readMintedToken: async (key) => items[key] ?? null,
       directoryExists: async () => true,
     });
@@ -75,6 +77,53 @@ test("a token minted before organisations were recorded is still read under the 
     },
   });
   assert.deepEqual(asked, ["alice@example.com"]);
+});
+
+// The default account: "Move all chats here" sets it, new chats open on it.
+
+const keyed = { ...work, id: "keyed", home: "/Users/me/.claude", tokenLogin: "alice@example.com", tokenOrg: "org-team" };
+
+function defaulted(options: { agents?: Record<string, string>; token?: string | null; defaults?: Record<string, string> } = {}) {
+  let stored: Registry = registry({
+    accounts: [work, keyed],
+    agents: options.agents ?? {},
+    defaults: options.defaults ?? { claude: "keyed" },
+  });
+  const deps = {
+    readRegistry: async () => stored,
+    writeRegistry: async (next: Registry) => {
+      stored = next;
+    },
+    readMintedToken: async () => (options.token === undefined ? "sk-ant-oat01-team" : options.token),
+    directoryExists: async () => true,
+  };
+  return { deps, stored: () => stored };
+}
+
+test("a chat with no binding opens on the default account and is bound to it", async () => {
+  const fake = defaulted();
+  const env = await sessionEnv(request({ agentId: "new" }), fake.deps);
+  assert.equal(env?.CLAUDE_CODE_OAUTH_TOKEN, "sk-ant-oat01-team");
+  assert.equal(fake.stored().agents.new, "keyed");
+});
+
+test("a chat bound by hand keeps its account over the default", async () => {
+  const fake = defaulted({ agents: { mine: "work" } });
+  const env = await sessionEnv(request({ agentId: "mine" }), fake.deps);
+  assert.equal(env, undefined, "work has no token, so the session is left alone rather than moved");
+  assert.equal(fake.stored().agents.mine, "work");
+});
+
+test("a default whose token cannot be read binds nothing", async () => {
+  const fake = defaulted({ token: null });
+  assert.equal(await sessionEnv(request({ agentId: "new" }), fake.deps), undefined);
+  assert.equal("new" in fake.stored().agents, false);
+});
+
+test("a default for another provider is not applied", async () => {
+  const fake = defaulted({ defaults: { codex: "keyed" } });
+  assert.equal(await sessionEnv(request({ agentId: "new" }), fake.deps), undefined);
+  assert.equal("new" in fake.stored().agents, false);
 });
 
 test("an account with no token login recorded leaves the session alone", async () => {

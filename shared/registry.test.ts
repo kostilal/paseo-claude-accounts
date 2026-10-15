@@ -10,6 +10,7 @@ import {
   removeAccounts,
   unhideHomes,
   resolveAccount,
+  defaultAccount,
   tokenKey,
   type Registry,
 } from "./registry.ts";
@@ -196,4 +197,15 @@ test("a token is keyed on its login and organisation, a legacy one on the login 
 test("a stored organisation survives a read of the state file", () => {
   const raw = { version: 2, accounts: [{ ...work, tokenLogin: "alice@example.com", tokenOrg: "org-team" }], agents: {} };
   assert.equal(parseRegistry(raw)?.accounts[0]?.tokenOrg, "org-team");
+});
+
+test("a default names an account of its own provider, and goes when the account is removed", () => {
+  const withDefault: Registry = { ...registry(), defaults: { claude: "work", codex: "work" } };
+  assert.equal(defaultAccount(withDefault, "claude")?.id, "work");
+  assert.equal(defaultAccount(withDefault, "codex"), null, "work is a Claude account");
+  assert.equal(defaultAccount(registry(), "claude"), null);
+  const removed = removeAccounts(withDefault, ["work"]);
+  assert.ok(removed.ok);
+  assert.deepEqual(removed.registry.defaults, {});
+  assert.equal(parseRegistry({ ...withDefault })?.defaults?.claude, "work");
 });

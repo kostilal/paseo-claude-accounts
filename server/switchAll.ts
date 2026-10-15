@@ -63,7 +63,8 @@ export async function listChats(paseo: PaseoApi): Promise<Chat[]> {
  * switch: refuse before writing, write every binding at once, then restart the idle chats.
  * A closed chat (not archived, just not running) only needs its binding; the session-open
  * hook applies it when the chat opens again. A chat whose restart fails gets its previous
- * binding back, so the pill never names an account it is not on.
+ * binding back, so the pill never names an account it is not on. The account also becomes
+ * the provider's default, which the hook gives every chat that opens without a binding.
  */
 export async function switchAll(accountId: string, deps: SwitchAllDeps): Promise<SwitchAllResult> {
   const none = { moved: 0, restarted: 0, failed: 0, skipped: 0, error: "" };
@@ -75,10 +76,10 @@ export async function switchAll(accountId: string, deps: SwitchAllDeps): Promise
   const mine = (await deps.chats()).filter((chat) => chat.provider === target.provider);
   const chats = mine.filter((chat) => !BUSY.has(chat.status));
   const skipped = mine.length - chats.length;
-  if (chats.length === 0) return { code: "", ...none, skipped };
-  let bound: Registry = registry;
+  let bound: Registry = { ...registry, defaults: { ...registry.defaults, [target.provider]: target.id } };
   for (const chat of chats) bound = applyBinding(bound, { agentId: chat.id, account: target.id });
   await deps.writeRegistry(bound);
+  if (chats.length === 0) return { code: "", ...none, skipped };
 
   const open = chats.filter((chat) => chat.status !== "closed");
   const failures: Array<{ id: string; error: string }> = [];

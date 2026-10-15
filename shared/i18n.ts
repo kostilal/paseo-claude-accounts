@@ -47,6 +47,8 @@ export interface Strings {
   noTokenYet: string;
   noTokenTap: string;
   tokenReady: string;
+  /** The login new chats open on, set by "Move all chats here". */
+  defaultAccount: string;
   mintToken: string;
   /** The same mint for an account that already has a key: a revoked one, or one filed before
    *  keys were kept per organisation. Adding an account starts the first mint by itself. */
@@ -143,6 +145,7 @@ const en: Strings = {
   noTokenYet: "Switching not enabled yet",
   noTokenTap: "tap to issue a switching key",
   tokenReady: "Switchable",
+  defaultAccount: "Default",
   mintToken: "Issue switching key",
   mintTokenAgain: "Renew switching key",
   mintFailed: "Could not start enabling switching.",
@@ -230,6 +233,7 @@ const ru: Strings = {
   noTokenYet: "Переключение ещё не разрешено",
   noTokenTap: "нажми, чтобы выпустить ключ",
   tokenReady: "Переключаемый",
+  defaultAccount: "По умолчанию",
   mintToken: "Выпустить ключ",
   mintTokenAgain: "Обновить ключ",
   mintFailed: "Не удалось запустить разрешение переключения.",
@@ -317,6 +321,7 @@ const uk: Strings = {
   noTokenYet: "Перемикання ще не дозволено",
   noTokenTap: "натисни, щоб випустити ключ",
   tokenReady: "Перемикається",
+  defaultAccount: "За замовчуванням",
   mintToken: "Випустити ключ",
   mintTokenAgain: "Оновити ключ",
   mintFailed: "Не вдалося запустити дозвіл перемикання.",

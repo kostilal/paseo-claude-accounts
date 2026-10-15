@@ -35,6 +35,9 @@ export interface Registry {
   /** Directories the user removed from the list. Removing only forgets an account, the
    *  directory and its login stay, so discovery would offer it straight back without this. */
   hidden?: string[];
+  /** provider -> account id, set by "Move all chats here". A chat with no binding of its own
+   *  is bound to it when its session opens, so new chats follow the last move. */
+  defaults?: Record<string, string>;
 }
 
 export function emptyRegistry(): Registry {
@@ -55,6 +58,7 @@ const stored = z.object({
   accounts: z.array(accountSchema).default([]),
   agents: z.record(z.string(), z.string()).default({}),
   hidden: z.array(z.string()).default([]),
+  defaults: z.record(z.string(), z.string()).optional(),
 });
 
 /**
@@ -83,6 +87,15 @@ export function accountById(registry: Registry, id: string): Account | null {
 export function resolveAccount(registry: Registry, context: { agentId: string }): Account | null {
   const bound = registry.agents[context.agentId];
   return bound === undefined ? null : accountById(registry, bound);
+}
+
+/** The account new chats of this provider are bound to, or null when none was chosen (or it
+ *  is gone, or belongs to another provider). */
+export function defaultAccount(registry: Registry, provider: string): Account | null {
+  const id = registry.defaults?.[provider];
+  if (id === undefined) return null;
+  const account = accountById(registry, id);
+  return account?.provider === provider ? account : null;
 }
 
 /** One agent binding set, or cleared with `account: null`. */
@@ -148,6 +161,9 @@ export function removeAccounts(registry: Registry, targets: readonly string[]): 
       ...registry,
       accounts: registry.accounts.filter((account) => !removed.has(account.id)),
       agents: Object.fromEntries(Object.entries(registry.agents).filter(([, id]) => !removed.has(id))),
+      ...(registry.defaults === undefined
+        ? {}
+        : { defaults: Object.fromEntries(Object.entries(registry.defaults).filter(([, id]) => !removed.has(id))) }),
       hidden: [...before, ...added],
     },
     removed: [...removed].sort(),

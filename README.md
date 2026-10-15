@@ -10,7 +10,7 @@ composer: the session restarts on that account and the conversation carries on.
   login buttons and "Add account".
 - **Per chat.** A switch moves one chat. Other chats, even in the same project, stay where they are.
 - **All chats at once.** "Move all chats here" on an account, pressed twice, moves every chat in
-  every workspace onto it. Idle chats restart on it now, closed ones when they next open; a chat in the middle of
+  every workspace onto it and makes it the default: chats opened later start on it too. Idle chats restart on it now, closed ones when they next open; a chat in the middle of
   a turn is left alone rather than cut off.
 
 <p>

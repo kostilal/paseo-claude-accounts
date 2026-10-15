@@ -44,6 +44,7 @@ function account(id: string, over: Partial<AccountView> = {}): AccountView {
     accountIds: [],
     switchTo: "",
     hasToken: false,
+    isDefault: false,
     usage: "unauthorised",
     fiveHour: null,
     sevenDay: null,
@@ -97,6 +98,17 @@ test("registered accounts come back in registry order, with no error", async () 
     ["work", "personal"],
   );
   assert.equal(view.error, "");
+});
+
+test("the login new chats open on is marked as the default, and only that one", async () => {
+  const view = await createOverview(deps({ readRegistry: async () => registry({ defaults: { claude: "personal" } }) }))(paseo);
+  assert.deepEqual(
+    view.accounts.map((row) => [row.id, row.isDefault]),
+    [
+      ["work", false],
+      ["personal", true],
+    ],
+  );
 });
 
 test("refresh is passed through to discovery, and defaults to off", async () => {
