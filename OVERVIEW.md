@@ -8,11 +8,11 @@ Claude Accounts lets you run Paseo chats on more than one Claude subscription an
 
 ## How switching works
 
-Each account you want to switch to needs a long-lived token, created once with `claude setup-token`. The Accounts screen and the pill open a terminal that runs it; you approve in the browser and the token is saved to the macOS Keychain. When you switch a chat, the plugin restarts that session with the token in `CLAUDE_CODE_OAUTH_TOKEN`. The session keeps its own config directory, so its transcript, settings and MCP servers stay where they are. A switch applies to that one chat only. Switching while a turn is running interrupts the turn; the pill asks for a second press first.
+Each account is a config directory with its own Claude login — the same login its usage is read from. When you switch a chat, the plugin restarts that session and points it at the account's directory through `CLAUDE_SECURESTORAGE_CONFIG_DIR`, so Claude Code reads that account's login from the Keychain while the session keeps its own config directory — transcript, settings and MCP servers stay where they are. One login per account, nothing to set up a second time. A switch applies to that one chat only. Switching while a turn is running interrupts the turn; the pill asks for a second press first.
 
 ## Setup
 
-- macOS. Tokens and usage credentials are read from the login Keychain.
+- macOS. Logins and usage are read from the login Keychain.
 - Claude Code installed and logged in at least once.
 - Accounts are config directories: `~/.claude`, any `~/.claude-*` directory you use with `CLAUDE_CONFIG_DIR`, and per-project `.claude-data` directories. "Add account" creates a new one and opens `claude auth login` for it.
 - Usage is read from Claude Code's Keychain item for each account. Until macOS allows that, background reads give up after three seconds and the account shows "Show usage". Press it once and choose "Always Allow" in the macOS dialog.
@@ -20,11 +20,13 @@ Each account you want to switch to needs a long-lived token, created once with `
 ## What it reads and stores
 
 - Account list and chat bindings: `~/.paseo-claude-accounts/accounts.json`. No secrets.
-- Tokens: the Keychain, service `paseo-claude-accounts`, one item per login. Tokens are never written to the state file, logs or the app.
+- Logins: Claude Code's own Keychain items, one per config directory. The plugin reads them to measure usage and never writes them; it stores no token of its own.
+- Who each account is: Anthropic's profile endpoint, called with the account's own login, and asked again only when that login's token changes. Claude Code rewrites the account cached in a project's `.claude.json` to the login its chats run on, so that cache is only the fallback.
 - Usage: Anthropic's usage endpoint, called with each config directory's own Claude Code credentials, at most every ten minutes per account. When those credentials have expired, the plugin runs `claude -p /usage` in that directory so Claude Code refreshes them itself; this makes no model call.
 
 ## Limits
 
-- A token from `setup-token` cannot read usage, so meters come from a config directory signed in to the same account. A token approved for another organisation than that directory's is refused. An account with a token but no signed-in directory switches fine but shows no meter.
-- If `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or a cloud provider variable is set in Paseo's environment, Claude Code uses it instead of the account token. The plugin warns when it can see one.
+- A switched chat shares the account's rotating login, refreshed in place, so chats never fight over a copied token — but logging an account out, or renaming its folder, logs out every chat on it until it logs in again.
+- If `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or a cloud provider variable is set in Paseo's environment, Claude Code uses it instead of the account login. The plugin warns when it can see one.
 - Codex accounts (`~/.codex*`) can be switched too, by pointing the chat at another `CODEX_HOME`. Codex has no readable usage meter.
+- Upgrading from 0.1.x removes the old per-account switching keys from the Keychain automatically; each account now runs on its directory's own login.

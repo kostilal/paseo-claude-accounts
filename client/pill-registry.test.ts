@@ -79,6 +79,19 @@ test("a repeat upsert without an intervening remove replaces rather than duplica
   assert.equal(first.removeCalls, 1, "the old one is removed before the new one is created — never two live at once");
 });
 
+test("updates for a working agent keep its pill, so an open popover stays open", () => {
+  // The daemon reports an agent again on every change while it works. The host keeps a
+  // popover's open state on the registration, so replacing it would close the popover.
+  const { attach, created } = stubAttach();
+  const registry = createPillRegistry({ attach });
+
+  registry.apply({ kind: "upsert", agent: { id: "a", workspaceId: "w" } });
+  for (let n = 0; n < 5; n += 1) registry.apply({ kind: "upsert", agent: { id: "a", workspaceId: "w" } });
+
+  assert.equal(created.length, 1, "no new registration for the same agent in the same workspace");
+  assert.equal(created[0].removeCalls, 0, "the live registration is never removed");
+});
+
 test("an upsert missing a workspaceId is ignored rather than attached with a hole in it", () => {
   const { attach, created } = stubAttach();
   const registry = createPillRegistry({ attach });

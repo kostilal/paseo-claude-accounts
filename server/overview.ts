@@ -5,8 +5,9 @@ import type { Identity } from "../shared/parse.ts";
 import { PROVIDERS, providerForHome } from "../shared/providers.ts";
 import { accountById, hiddenHomes, type Registry } from "../shared/registry.ts";
 import { displayName, isClaudeNotFound } from "./discover.ts";
-import { chooseUsageHome, groupByLogin, type LoginCandidate, preferTokenHolder } from "./groupLogins.ts";
+import { chooseUsageHome, groupByLogin, type LoginCandidate } from "./groupLogins.ts";
 import { usageForLogin, usageOrder } from "./groupUsage.ts";
+import { type ProfileIdentity, ownLogin } from "./profile.ts";
 import type { ProjectRow } from "./projects.ts";
 import type { UsageResult } from "./usage.ts";
 
@@ -29,6 +30,9 @@ export interface OverviewDeps {
   projects: ProjectsReader;
   usage: UsageReader;
   defaultDir(): string;
+  /** Who a Claude directory's own login belongs to, asked of Anthropic; see server/profile.ts.
+   *  Absent, or null: the identity discovery reported stands. */
+  profile?(home: string, refresh: boolean): Promise<ProfileIdentity | null>;
   log?(line: string): void;
 }
 
@@ -66,12 +70,10 @@ export function createOverview(deps: OverviewDeps) {
     const byHome = new Map(discovered.map((row) => [row.id, row]));
 
     // One row per login across all registered directories.
-    const candidates: LoginCandidate[] = registry.accounts.map((account) => {
-      const found = byHome.get(account.home);
-      return {
-        accountId: account.id,
-        home: account.home,
-        identity:
+    const candidates: LoginCandidate[] = await Promise.all(
+      registry.accounts.map(async (account) => {
+        const found = byHome.get(account.home);
+        const discoveredIdentity: Identity =
           found === undefined
             ? notDiscovered
             : {
@@ -79,19 +81,25 @@ export function createOverview(deps: OverviewDeps) {
                 email: found.email,
                 orgName: found.orgName,
                 subscriptionType: found.subscriptionType,
-              },
-      };
-    });
+              };
+        const profile = deps.profile;
+        return {
+          accountId: account.id,
+          home: account.home,
+          identity: await ownLogin(
+            account,
+            discoveredIdentity,
+            profile && ((home) => profile(home, refresh || force)),
+          ),
+        };
+      }),
+    );
     // No single project or agent in view, so switchTo falls through to the lowest id.
-    const hasToken = (id: string) => {
-      const login = accountById(registry, id)?.tokenLogin;
-      return login !== undefined && login !== "";
-    };
     const groups = groupByLogin(candidates, {
       boundAccountId: null,
       resolvedAccountId: null,
       projectAccountId: null,
-    }).map((group) => preferTokenHolder(group, hasToken));
+    });
 
     const registered = groups.map((group) => {
       // switchTo, or the lowest member when the login cannot be switched to.
@@ -111,12 +119,6 @@ export function createOverview(deps: OverviewDeps) {
         subscriptionType: group.plan,
         accountIds: group.accountIds,
         switchTo: group.switchTo,
-        // Whether a press can switch: a token for token-switched providers, a login for
-        // directory-switched ones (the same rule as the pill).
-        hasToken:
-          PROVIDERS[landsOn?.provider ?? "claude"].switch.kind === "home"
-            ? group.loggedIn
-            : group.switchTo !== "" && hasToken(group.switchTo),
         isDefault: group.accountIds.includes(registry.defaults?.[landsOn?.provider ?? "claude"] ?? ""),
         usage: "unauthorised" as const,
         fiveHour: null,
@@ -133,7 +135,7 @@ export function createOverview(deps: OverviewDeps) {
     const hidden = hiddenHomes(registry);
     const suggestions = discovered
       .filter((row) => row.loggedIn && !homes.has(row.id) && !hidden.has(row.id))
-      .map((row) => ({ ...row, home: row.id, registered: false, hasToken: false }));
+      .map((row) => ({ ...row, home: row.id, registered: false }));
 
     const accounts = [...registered, ...suggestions];
     // Background reads are bounded (three seconds on a Keychain dialog) and cached, so a
@@ -224,7 +226,6 @@ export function createUsageRow(deps: UsageRowDeps) {
         subscriptionType: "",
         accountIds: [],
         switchTo: "",
-        hasToken: false,
         isDefault: false,
         usage: "error" as const,
         fiveHour: null,
@@ -255,7 +256,6 @@ export function createUsageRow(deps: UsageRowDeps) {
       subscriptionType: identity.subscriptionType,
       accountIds: [],
       switchTo: "",
-      hasToken: false,
       isDefault: false,
       usage: result.state,
       fiveHour: result.fiveHour,

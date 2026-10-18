@@ -247,25 +247,7 @@ test("a project directory on a different login does not drag its own group's cho
   assert.equal(teamRow?.switchTo, "team");
 });
 
-test("switchTo prefers a member holding a minted token over the one the chat is bound to", async () => {
-  const state = await pillStateFor(
-    input,
-    groupedDeps({
-      readRegistry: async () =>
-        groupedRegistry({
-          accounts: [dflt, team, site, { ...tools, tokenLogin: "alice@example.com" }, apex, beta],
-          agents: { ag1: "apex" },
-        }),
-    }),
-  );
-  const maxRow = state.accounts.find((row) => row.email === "alice@example.com");
-  // `apex` is bound but has no token; `tools` does, so the press lands there.
-  assert.equal(maxRow?.switchTo, "tools");
-  assert.equal(maxRow?.hasToken, true);
-  assert.equal(maxRow?.current, true);
-});
-
-test("a row without any token holder says so, and lands on the bound member", async () => {
+test("a row lands on the member the chat is bound to", async () => {
   const state = await pillStateFor(
     input,
     groupedDeps({
@@ -274,7 +256,7 @@ test("a row without any token holder says so, and lands on the bound member", as
   );
   const maxRow = state.accounts.find((row) => row.email === "alice@example.com");
   assert.equal(maxRow?.switchTo, "apex");
-  assert.equal(maxRow?.hasToken, false);
+  assert.equal(maxRow?.current, true);
 });
 
 test("switchTo falls back to the lowest id when nothing names this login", async () => {
@@ -387,4 +369,24 @@ test("a codex row reports an allowance nobody can measure, and reads no keychain
   assert.equal(row?.sevenDay, null);
   // Still pressable without a meter.
   assert.equal(row?.loggedIn, true);
+});
+
+// A chat running on another account rewrites the login cached in its project's `.claude.json`,
+// so `identify` (which reads that cache) can report another project's login for a directory.
+const rewritten = { loggedIn: true, email: "home@example.com", orgName: "", subscriptionType: "max" };
+
+test("a project whose cached login was rewritten keeps its own row", async () => {
+  const merged = await pillStateFor(input, deps({ identify: async () => rewritten }));
+  assert.equal(merged.accounts.length, 1, "without its own login the two directories read as one");
+
+  const state = await pillStateFor(
+    input,
+    deps({
+      identify: async () => rewritten,
+      profile: async (dir) => (dir === work.home ? { email: "work@example.com", orgName: "", orgId: "org-work" } : null),
+    }),
+  );
+  assert.equal(state.accounts.length, 2);
+  assert.equal(state.accounts.find((row) => row.accountIds.includes("work"))?.email, "work@example.com");
+  assert.equal(state.accounts.find((row) => row.accountIds.includes("home"))?.email, "home@example.com");
 });

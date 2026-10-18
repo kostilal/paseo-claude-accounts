@@ -1,6 +1,6 @@
 import type { Identity } from "../shared/parse.ts";
 import { PROVIDERS, type ProviderSpec } from "../shared/providers.ts";
-import { type Account, type Registry, accountById, applyBinding, tokenKey } from "../shared/registry.ts";
+import { type Account, type Registry, accountById, applyBinding } from "../shared/registry.ts";
 import type { SwitchCode } from "../shared/switch.ts";
 import type { ReloadCode } from "./reload.ts";
 
@@ -13,11 +13,8 @@ export interface SwitchDeps {
   readRegistry(): Promise<Registry>;
   writeRegistry(value: Registry): Promise<void>;
   exists(path: string): Promise<boolean>;
-  /** The same read the session-open hook makes, done first so a switch the hook would
-   *  silently ignore is refused up front. Only presence is used; the value is dropped.
-   *  A rejection (e.g. `KeychainTimeout`) propagates before anything is written. */
-  readMintedToken(login: string): Promise<string | null>;
-  /** Who the target directory is logged in as. Only the home mechanism asks. */
+  /** Who the target directory is logged in as: a switch binds the session to that directory,
+   *  so a logged-out one is refused up front rather than opening an empty session. */
   identify(home: string): Promise<Identity>;
   reload(agentId: string): Promise<{ code: ReloadCode; error: string }>;
 }
@@ -27,7 +24,7 @@ export interface SwitchDeps {
 export async function switchTarget(
   registry: Registry,
   accountId: string,
-  deps: Pick<SwitchDeps, "exists" | "identify" | "readMintedToken">,
+  deps: Pick<SwitchDeps, "exists" | "identify">,
 ): Promise<{ target: Account } | { code: Exclude<SwitchCode, ""> }> {
   const target = accountById(registry, accountId);
   if (target === null) return { code: "unknown-account" };
@@ -35,16 +32,7 @@ export async function switchTarget(
   const spec = PROVIDERS[target.provider] as ProviderSpec | undefined;
   if (spec === undefined || !spec.supported) return { code: "unsupported-provider" };
   if (!(await deps.exists(target.home))) return { code: "missing-directory" };
-
-  if (spec.switch.kind === "home") {
-    if (!(await deps.identify(target.home)).loggedIn) return { code: "not-logged-in" };
-  } else {
-    // Without a token the hook injects nothing and the session would reopen on the old
-    // account while the pill claimed the new one.
-    const key = tokenKey(target);
-    if (key === null) return { code: "no-token" };
-    if ((await deps.readMintedToken(key)) === null) return { code: "no-token" };
-  }
+  if (!(await deps.identify(target.home)).loggedIn) return { code: "not-logged-in" };
   return { target };
 }
 

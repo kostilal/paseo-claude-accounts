@@ -11,7 +11,7 @@ export interface Chat {
   status: string;
 }
 
-export interface SwitchAllDeps extends Pick<SwitchDeps, "readRegistry" | "writeRegistry" | "exists" | "identify" | "readMintedToken"> {
+export interface SwitchAllDeps extends Pick<SwitchDeps, "readRegistry" | "writeRegistry" | "exists" | "identify"> {
   /** Every chat that is not archived, in every workspace. */
   chats(): Promise<Chat[]>;
   reload(agentId: string): Promise<{ code: ReloadCode; error: string }>;

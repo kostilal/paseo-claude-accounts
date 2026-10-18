@@ -10,9 +10,9 @@ import { switchAccountRpc, switchAllRpc } from "../shared/switch.ts";
  * which one restarts a chat. So the plugin says it itself, under a method every plugin can
  * answer the same way, in the `paseo.capabilities/1` shape.
  *
- * Only reading the accounts and moving chats between them are offered. Adding, deleting,
- * logging in and switching keys stay on the Accounts screen: they open terminals, touch the
- * Keychain or forget accounts, which a misheard sentence must never do.
+ * Only reading the accounts and moving chats between them are offered. Adding, deleting and
+ * logging in stay on the Accounts screen: they open terminals or forget accounts, which a
+ * misheard sentence must never do.
  *
  * Every operation points at a real RPC of this plugin, and the arguments it advertises are
  * rendered from zod contracts that the handler's own contract accepts, so the description
@@ -138,7 +138,7 @@ export const OPERATIONS: AccountsOperation[] = [
     fixed: { refresh: false, force: false },
     title: "Claude accounts and their usage",
     description:
-      "One row per login on this Mac. name: the account's label; email, orgName, subscriptionType: whose login and which plan; isDefault: new chats open on it; usage: ok, expired, unauthorised, none, error or unsupported, with fiveHour and sevenDay utilization in percent and when each resets. switchTo is the account to switch to, empty when it cannot be; hasToken false: it needs a switching key first. Usage may be ten minutes old. error claude-not-found: no claude command. overridingVar: a variable that makes switching useless.",
+      "One row per login on this Mac. name: the account's label; email, orgName, subscriptionType: whose login and which plan; isDefault: new chats open on it; usage: ok, expired, unauthorised, none, error or unsupported, with fiveHour and sevenDay utilization in percent and when each resets. switchTo is the account to switch to, empty when nobody is logged in to it. Usage may be ten minutes old. error claude-not-found: no claude command. overridingVar: a variable that makes switching useless.",
     input: none,
     fields: OVERVIEW_FIELDS,
   },
@@ -169,7 +169,7 @@ export const OPERATIONS: AccountsOperation[] = [
     contract: switchAccountRpc,
     title: "Move a chat to another account",
     description:
-      "Restart one chat on another account; the conversation carries on and other chats keep theirs. A turn in progress is cut off. A code says it was refused: no-token (the account needs a switching key, issued on the Accounts screen), not-logged-in, unknown-account, missing-directory, or reload-failed (the chat kept its account).",
+      "Restart one chat on another account; the conversation carries on and other chats keep theirs. A turn in progress is cut off. A code says it was refused: not-logged-in (nobody is logged in to that account), unknown-account, missing-directory, or reload-failed (the chat kept its account).",
     input: z.object({ agentId, account }),
     fields: ["code", "error"],
     risk: "disruptive",

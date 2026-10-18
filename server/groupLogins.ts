@@ -106,11 +106,3 @@ export function chooseUsageHome(
   }
   return group.switchTo === "" ? null : homeOf(group.switchTo);
 }
-
-/** A switch only works through a minted token on the bound account, so when the chosen
- *  member has none and a sibling on the same login does, bind the sibling (lowest id). */
-export function preferTokenHolder(group: LoginGroup, hasToken: (accountId: string) => boolean): LoginGroup {
-  if (group.switchTo === "" || hasToken(group.switchTo)) return group;
-  const holder = [...group.accountIds].sort().find((id) => hasToken(id));
-  return holder === undefined ? group : { ...group, switchTo: holder };
-}

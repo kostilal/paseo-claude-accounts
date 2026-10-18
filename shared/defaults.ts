@@ -7,10 +7,6 @@ export const defaultProblem = z.enum([
   "",
   /** The default names an account that was removed (or a hand-edited id). */
   "unknown-account",
-  /** The account has no switching key recorded, or the Keychain no longer holds it. */
-  "no-token",
-  /** Anthropic answered 401 to the key: it expired or was revoked. */
-  "token-rejected",
   /** The account's directory is gone. */
   "missing-directory",
 ]);
@@ -29,8 +25,6 @@ export const defaultOption = z.object({
   id: z.string(),
   /** The registry label. */
   label: z.string(),
-  /** Whose subscription the account's switching key bills. */
-  login: z.string().default(""),
 });
 
 export type DefaultOption = z.output<typeof defaultOption>;
@@ -41,11 +35,11 @@ export const getDefaultRpc = defineRpc({
   output: z.object({
     /** The default's account id, or "" when none is set. */
     account: z.string().default(""),
-    /** Why that default cannot open a chat now; checked live (Keychain, then Anthropic). */
+    /** Why that default cannot open a chat now; checked live. */
     problem: defaultProblem.default(""),
     /** The label of `account`, kept even when the account is gone so a problem can name it. */
     label: z.string().default(""),
-    /** Accounts of this provider that can be chosen: Claude ones need a switching key. */
+    /** Accounts of this provider that can be chosen. */
     options: z.array(defaultOption).default([]),
   }),
 });
@@ -68,8 +62,6 @@ export const setDefaultRpc = defineRpc({
 export function refusalText(strings: Strings, code: RefusalCode, values: { label?: string; dir?: string } = {}): string {
   const template = {
     "unknown-account": strings.refuseDefaultGone,
-    "no-token": strings.refuseDefaultNoToken,
-    "token-rejected": strings.refuseDefaultRejected,
     "missing-directory": strings.refuseDefaultMissingDir,
     "not-set": strings.refuseNotSet,
     "no-accounts": strings.refuseNoAccounts,

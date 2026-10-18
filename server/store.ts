@@ -10,9 +10,6 @@ export const STATE_DIR = join(homedir(), ".paseo-claude-accounts");
 
 export const STATE_FILE = join(STATE_DIR, "accounts.json");
 
-/** Where mint terminals leave their transcripts while the daemon finishes them. */
-export const MINTS_DIR = join(STATE_DIR, "mints");
-
 /**
  * What the state file is. `absent` is a fresh install and safe to write over; `unreadable`
  * is somebody's state this version did not understand, and must not be overwritten with

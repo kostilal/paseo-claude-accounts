@@ -7,6 +7,7 @@ export interface Strings {
   notLoggedIn: string;
   logIn: string;
   noWorkspace: string;
+  loginFailed: string;
   showUsage: string;
   fiveHourUsage: string;
   sevenDayUsage: string;
@@ -28,11 +29,9 @@ export interface Strings {
   pillNoAccount: string;
   currentAccount: string;
   switchTo: string;
-  pillNotLoggedIn: string;
   switchPaseoMissing: string;
   switchMissingDirectory: string;
   switchUnsupportedProvider: string;
-  switchNoToken: string;
   switchNotLoggedIn: string;
   switchUnknownAccount: string;
   switchBusy: string;
@@ -44,16 +43,8 @@ export interface Strings {
   reloadFailed: string;
   pillEmptyTitle: string;
   pillEmptyDetail: string;
-  noTokenYet: string;
-  noTokenTap: string;
-  tokenReady: string;
   /** The login new chats open on, set by "Move all chats here". */
   defaultAccount: string;
-  mintToken: string;
-  /** The same mint for an account that already has a key: a revoked one, or one filed before
-   *  keys were kept per organisation. Adding an account starts the first mint by itself. */
-  mintTokenAgain: string;
-  mintFailed: string;
   addAccount: string;
   add: string;
   chooseProvider: string;
@@ -78,8 +69,6 @@ export interface Strings {
   defaultSettingFailed: string;
   /** Why a new chat was not started; also the settings banner for a broken default. */
   refuseDefaultGone: string;
-  refuseDefaultNoToken: string;
-  refuseDefaultRejected: string;
   refuseDefaultMissingDir: string;
   refuseNotSet: string;
   refuseNoAccounts: string;
@@ -119,6 +108,7 @@ const en: Strings = {
   notLoggedIn: "Not logged in",
   logIn: "Log in",
   noWorkspace: "Open a workspace first: a terminal needs one to live in",
+  loginFailed: "Could not start the login.",
   showUsage: "Show usage",
   fiveHourUsage: "5 hours",
   sevenDayUsage: "Week",
@@ -139,11 +129,9 @@ const en: Strings = {
   pillNoAccount: "No account",
   currentAccount: "This chat runs on",
   switchTo: "Switch to",
-  pillNotLoggedIn: "Not logged in",
   switchPaseoMissing: "Could not find the paseo command to restart the session",
   switchMissingDirectory: "That account's directory is gone",
   switchUnsupportedProvider: "That account is for a provider this plugin does not run yet",
-  switchNoToken: "That account has no switching key yet",
   switchNotLoggedIn: "Nobody is logged in to that account's directory yet",
   switchUnknownAccount: "That account is not in the list any more",
   switchBusy: "This will interrupt the current turn. Press again to switch anyway.",
@@ -155,13 +143,7 @@ const en: Strings = {
   reloadFailed: "Could not reload.",
   pillEmptyTitle: "No accounts yet",
   pillEmptyDetail: "Add one in Accounts first.",
-  noTokenYet: "Switching not enabled yet",
-  noTokenTap: "tap to issue a switching key",
-  tokenReady: "Switchable",
   defaultAccount: "Default",
-  mintToken: "Issue switching key",
-  mintTokenAgain: "Renew switching key",
-  mintFailed: "Could not start enabling switching.",
   addAccount: "Add account",
   add: "Add",
   chooseProvider: "Provider",
@@ -180,15 +162,13 @@ const en: Strings = {
   settingsHint: "Changes apply immediately.",
   defaultSetting: "Default account for new chats",
   defaultSettingNone: "Not set: a chat uses its folder's login",
-  defaultSettingHint: "A new chat opens on this account. Existing chats keep theirs; to move them, use \"Move all chats here\" on the Accounts screen. Only accounts with a switching key are listed.",
-  defaultSettingEmpty: "No account has a switching key yet. Enable switching for one on the Accounts screen to choose it here.",
+  defaultSettingHint: "A new chat opens on this account. Existing chats keep theirs; to move them, use \"Move all chats here\" on the Accounts screen.",
+  defaultSettingEmpty: "No accounts yet. Log in to one on the Accounts screen to choose it here.",
   defaultSettingFailed: "Could not save the default account.",
   refuseDefaultGone: "The default account for new chats is no longer in the list. Choose another in Settings → Plugins → Claude Accounts.",
-  refuseDefaultNoToken: "The default account \"{label}\" has no switching key. Enable switching for it on the Accounts screen, or choose another default in Settings → Plugins → Claude Accounts.",
-  refuseDefaultRejected: "The switching key of the default account \"{label}\" was rejected: it expired or was revoked. Renew it on the Accounts screen, or choose another default in Settings → Plugins → Claude Accounts.",
   refuseDefaultMissingDir: "The folder of the default account \"{label}\" is gone. Choose another default in Settings → Plugins → Claude Accounts.",
   refuseNotSet: "This chat has no Claude account: nobody is logged in to {dir} and no default account is set. Choose one in Settings → Plugins → Claude Accounts, or log in on the Accounts screen.",
-  refuseNoAccounts: "This chat has no Claude account: nobody is logged in to {dir} and no account has a switching key. Add an account on the Accounts screen and enable switching for it, then choose it in Settings → Plugins → Claude Accounts.",
+  refuseNoAccounts: "This chat has no Claude account: nobody is logged in to {dir} and no account has been added. Log in to one on the Accounts screen, then choose it in Settings → Plugins → Claude Accounts.",
   pillUnread: "…",
   deleteAccount: "Delete",
   deleteConfirm: "Remove this account from the list? Its folder and login stay where they are.",
@@ -218,6 +198,7 @@ const ru: Strings = {
   notLoggedIn: "Не выполнен вход",
   logIn: "Войти",
   noWorkspace: "Сначала открой воркспейс: терминалу нужно в чём-то жить",
+  loginFailed: "Не удалось запустить вход.",
   showUsage: "Показать лимиты",
   fiveHourUsage: "5 часов",
   sevenDayUsage: "Неделя",
@@ -238,11 +219,9 @@ const ru: Strings = {
   pillNoAccount: "Без аккаунта",
   currentAccount: "Этот чат идёт на",
   switchTo: "Переключиться на",
-  pillNotLoggedIn: "Не залогинен",
   switchPaseoMissing: "Не нашёл команду paseo, чтобы перезапустить сессию",
   switchMissingDirectory: "Директории этого аккаунта больше нет",
   switchUnsupportedProvider: "Этот аккаунт для провайдера, который плагин пока не ведёт",
-  switchNoToken: "У этого аккаунта ещё нет ключа переключения",
   switchNotLoggedIn: "В директорию этого аккаунта ещё никто не вошёл",
   switchUnknownAccount: "Этого аккаунта больше нет в списке",
   switchBusy: "Это прервёт текущий ход. Нажми ещё раз, чтобы всё равно переключиться.",
@@ -254,13 +233,7 @@ const ru: Strings = {
   reloadFailed: "Не удалось обновить.",
   pillEmptyTitle: "Аккаунтов пока нет",
   pillEmptyDetail: "Сначала добавь в разделе «Аккаунты».",
-  noTokenYet: "Переключение ещё не разрешено",
-  noTokenTap: "нажми, чтобы выпустить ключ",
-  tokenReady: "Переключаемый",
   defaultAccount: "По умолчанию",
-  mintToken: "Выпустить ключ",
-  mintTokenAgain: "Обновить ключ",
-  mintFailed: "Не удалось запустить разрешение переключения.",
   addAccount: "Добавить аккаунт",
   add: "Добавить",
   chooseProvider: "Провайдер",
@@ -279,15 +252,13 @@ const ru: Strings = {
   settingsHint: "Изменения применяются сразу.",
   defaultSetting: "Аккаунт по умолчанию для новых чатов",
   defaultSettingNone: "Не задан: чат берёт вход своей папки",
-  defaultSettingHint: "Новый чат открывается на этом аккаунте. Существующие чаты остаются на своих; перенести их можно кнопкой «Перевести все чаты сюда» на экране аккаунтов. В списке только аккаунты с ключом переключения.",
-  defaultSettingEmpty: "Ни у одного аккаунта ещё нет ключа переключения. Разреши переключение на экране аккаунтов, чтобы выбрать его здесь.",
+  defaultSettingHint: "Новый чат открывается на этом аккаунте. Существующие чаты остаются на своих; перенести их можно кнопкой «Перевести все чаты сюда» на экране аккаунтов.",
+  defaultSettingEmpty: "Аккаунтов пока нет. Войди в один на экране аккаунтов, чтобы выбрать его здесь.",
   defaultSettingFailed: "Не удалось сохранить аккаунт по умолчанию.",
   refuseDefaultGone: "Аккаунта по умолчанию для новых чатов больше нет в списке. Выбери другой в разделе Настройки → Плагины → Claude Accounts.",
-  refuseDefaultNoToken: "У аккаунта по умолчанию «{label}» нет ключа переключения. Разреши для него переключение на экране аккаунтов или выбери другой в разделе Настройки → Плагины → Claude Accounts.",
-  refuseDefaultRejected: "Ключ переключения аккаунта по умолчанию «{label}» отклонён: истёк или отозван. Обнови его на экране аккаунтов или выбери другой в разделе Настройки → Плагины → Claude Accounts.",
   refuseDefaultMissingDir: "Папки аккаунта по умолчанию «{label}» больше нет. Выбери другой в разделе Настройки → Плагины → Claude Accounts.",
   refuseNotSet: "У этого чата нет аккаунта Claude: в {dir} никто не вошёл, а аккаунт по умолчанию не задан. Выбери его в разделе Настройки → Плагины → Claude Accounts или войди на экране аккаунтов.",
-  refuseNoAccounts: "У этого чата нет аккаунта Claude: в {dir} никто не вошёл, и ни у одного аккаунта нет ключа переключения. Добавь аккаунт на экране аккаунтов, разреши переключение и выбери его в разделе Настройки → Плагины → Claude Accounts.",
+  refuseNoAccounts: "У этого чата нет аккаунта Claude: в {dir} никто не вошёл, и ни одного аккаунта не добавлено. Войди в один на экране аккаунтов и выбери его в разделе Настройки → Плагины → Claude Accounts.",
   pillUnread: "…",
   deleteAccount: "Удалить",
   deleteConfirm: "Убрать аккаунт из списка? Папка и вход останутся.",
@@ -317,6 +288,7 @@ const uk: Strings = {
   notLoggedIn: "Вхід не виконано",
   logIn: "Увійти",
   noWorkspace: "Спочатку відкрий воркспейс: терміналу потрібно десь жити",
+  loginFailed: "Не вдалося запустити вхід.",
   showUsage: "Показати ліміти",
   fiveHourUsage: "5 годин",
   sevenDayUsage: "Тиждень",
@@ -337,11 +309,9 @@ const uk: Strings = {
   pillNoAccount: "Без акаунта",
   currentAccount: "Цей чат іде на",
   switchTo: "Перемкнутися на",
-  pillNotLoggedIn: "Не залогінений",
   switchPaseoMissing: "Не знайшов команду paseo, щоб перезапустити сесію",
   switchMissingDirectory: "Директорії цього акаунта більше немає",
   switchUnsupportedProvider: "Цей акаунт для провайдера, якого плагін поки не веде",
-  switchNoToken: "У цього акаунта ще немає ключа перемикання",
   switchNotLoggedIn: "До директорії цього акаунта ще ніхто не увійшов",
   switchUnknownAccount: "Цього акаунта більше немає у списку",
   switchBusy: "Це перерве поточний хід. Натисни ще раз, щоб усе одно перемкнути.",
@@ -353,13 +323,7 @@ const uk: Strings = {
   reloadFailed: "Не вдалося оновити.",
   pillEmptyTitle: "Акаунтів поки немає",
   pillEmptyDetail: "Спочатку додай у розділі «Акаунти».",
-  noTokenYet: "Перемикання ще не дозволено",
-  noTokenTap: "натисни, щоб випустити ключ",
-  tokenReady: "Перемикається",
   defaultAccount: "За замовчуванням",
-  mintToken: "Випустити ключ",
-  mintTokenAgain: "Оновити ключ",
-  mintFailed: "Не вдалося запустити дозвіл перемикання.",
   addAccount: "Додати акаунт",
   add: "Додати",
   chooseProvider: "Провайдер",
@@ -378,15 +342,13 @@ const uk: Strings = {
   settingsHint: "Зміни застосовуються одразу.",
   defaultSetting: "Акаунт за замовчуванням для нових чатів",
   defaultSettingNone: "Не задано: чат бере вхід своєї теки",
-  defaultSettingHint: "Новий чат відкривається на цьому акаунті. Наявні чати лишаються на своїх; перенести їх можна кнопкою «Перевести всі чати сюди» на екрані акаунтів. У списку лише акаунти з ключем перемикання.",
-  defaultSettingEmpty: "Жоден акаунт ще не має ключа перемикання. Дозволь перемикання на екрані акаунтів, щоб обрати його тут.",
+  defaultSettingHint: "Новий чат відкривається на цьому акаунті. Наявні чати лишаються на своїх; перенести їх можна кнопкою «Перевести всі чати сюди» на екрані акаунтів.",
+  defaultSettingEmpty: "Акаунтів поки немає. Увійди в один на екрані акаунтів, щоб обрати його тут.",
   defaultSettingFailed: "Не вдалося зберегти акаунт за замовчуванням.",
   refuseDefaultGone: "Акаунта за замовчуванням для нових чатів більше немає у списку. Обери інший у розділі Налаштування → Плагіни → Claude Accounts.",
-  refuseDefaultNoToken: "Акаунт за замовчуванням «{label}» не має ключа перемикання. Дозволь для нього перемикання на екрані акаунтів або обери інший у розділі Налаштування → Плагіни → Claude Accounts.",
-  refuseDefaultRejected: "Ключ перемикання акаунта за замовчуванням «{label}» відхилено: він сплив або відкликаний. Онови його на екрані акаунтів або обери інший у розділі Налаштування → Плагіни → Claude Accounts.",
   refuseDefaultMissingDir: "Теки акаунта за замовчуванням «{label}» більше немає. Обери інший у розділі Налаштування → Плагіни → Claude Accounts.",
   refuseNotSet: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, а акаунт за замовчуванням не задано. Обери його в розділі Налаштування → Плагіни → Claude Accounts або увійди на екрані акаунтів.",
-  refuseNoAccounts: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, і жоден акаунт не має ключа перемикання. Додай акаунт на екрані акаунтів, дозволь перемикання й обери його в розділі Налаштування → Плагіни → Claude Accounts.",
+  refuseNoAccounts: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, і жодного акаунта не додано. Увійди в один на екрані акаунтів і обери його в розділі Налаштування → Плагіни → Claude Accounts.",
   pillUnread: "…",
   deleteAccount: "Видалити",
   deleteConfirm: "Прибрати акаунт зі списку? Тека й вхід залишаться.",

@@ -19,19 +19,23 @@ export interface PillRegistry {
 /**
  * One pill registration per agent, keyed by agentId. Free of React so it can be tested.
  *
- * A repeat upsert removes and recreates the pill: `update()` cannot change a registration's
- * workspaceId, and the wire never proves the workspace is unchanged.
+ * The daemon reports an agent again on every change while it works, and the host keeps a
+ * popover's open state on its registration, so a pill is only replaced when the agent's
+ * workspace changes (`update()` cannot move a registration to another workspace). Replacing
+ * it on every report would close an open popover each time the agent printed something.
  */
 export function createPillRegistry(deps: {
   attach(agentId: string, workspaceId: string): PluginButtonRegistration;
 }): PillRegistry {
-  const pills = new Map<string, PluginButtonRegistration>();
+  const pills = new Map<string, { registration: PluginButtonRegistration; workspaceId: string }>();
   let stopped = false;
 
   function attach(agentId: string, workspaceId: string) {
     if (stopped) return;
-    pills.get(agentId)?.remove();
-    pills.set(agentId, deps.attach(agentId, workspaceId));
+    const current = pills.get(agentId);
+    if (current !== undefined && current.workspaceId === workspaceId) return;
+    current?.registration.remove();
+    pills.set(agentId, { registration: deps.attach(agentId, workspaceId), workspaceId });
   }
 
   return {
@@ -41,7 +45,7 @@ export function createPillRegistry(deps: {
     apply(update) {
       if (stopped) return;
       if (update.kind === "remove") {
-        pills.get(update.agentId)?.remove();
+        pills.get(update.agentId)?.registration.remove();
         pills.delete(update.agentId);
         return;
       }
@@ -50,7 +54,7 @@ export function createPillRegistry(deps: {
     },
     stop() {
       stopped = true;
-      for (const registration of pills.values()) registration.remove();
+      for (const { registration } of pills.values()) registration.remove();
       pills.clear();
     },
   };

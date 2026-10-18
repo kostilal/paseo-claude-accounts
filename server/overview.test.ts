@@ -43,7 +43,6 @@ function account(id: string, over: Partial<AccountView> = {}): AccountView {
     subscriptionType,
     accountIds: [],
     switchTo: "",
-    hasToken: false,
     isDefault: false,
     usage: "unauthorised",
     fiveHour: null,
@@ -593,7 +592,7 @@ test("a claude suggestion keeps the claude provider", async () => {
   assert.equal(view.accounts.find((row) => row.home === SPARE)?.provider, "claude");
 });
 
-test("a registered codex row can be switched to whenever it is logged in, with no token", async () => {
+test("a registered codex row can be switched to whenever it is logged in", async () => {
   const view = await createOverview(
     deps({
       discover: async () => [account(CODEX, { provider: "codex", email: "bob@example.com" })],
@@ -602,31 +601,67 @@ test("a registered codex row can be switched to whenever it is logged in, with n
   )(paseo);
   const row = view.accounts.find((row) => row.accountIds.includes("cdx"));
   assert.equal(row?.provider, "codex");
-  assert.equal(row?.hasToken, true);
+  assert.equal(row?.switchTo, "cdx");
   assert.equal(row?.usage, "unsupported");
 });
 
-test("a registered codex row that is logged out cannot be switched to", async () => {
+test("a registered row that is logged out cannot be switched to", async () => {
   const view = await createOverview(
     deps({
       discover: async () => [account(CODEX, { provider: "codex", loggedIn: false })],
       readRegistry: async () => registry({ accounts: [codexAccount] }),
     }),
   )(paseo);
-  assert.equal(view.accounts.find((row) => row.accountIds.includes("cdx"))?.hasToken, false);
+  assert.equal(view.accounts.find((row) => row.accountIds.includes("cdx"))?.switchTo, "");
 });
 
-test("a registered claude row has a token only once one was minted for it", async () => {
+test("a registered claude row can be switched to whenever it is logged in", async () => {
   const view = await createOverview(
     deps({
       discover: async () => [
         account(WORK, { email: "alice@example.com" }),
         account(PERSONAL, { email: "bob@example.com" }),
       ],
-      readRegistry: async () =>
-        registry({ accounts: [{ ...workAccount, tokenLogin: "alice@example.com" }, personalAccount] }),
+      readRegistry: async () => registry({ accounts: [workAccount, personalAccount] }),
     }),
   )(paseo);
-  assert.equal(view.accounts.find((row) => row.accountIds.includes("work"))?.hasToken, true);
-  assert.equal(view.accounts.find((row) => row.accountIds.includes("personal"))?.hasToken, false);
+  assert.equal(view.accounts.find((row) => row.accountIds.includes("work"))?.switchTo, "work");
+  assert.equal(view.accounts.find((row) => row.accountIds.includes("personal"))?.switchTo, "personal");
+});
+
+// A chat running on another account rewrites the login cached in its project's `.claude.json`,
+// so discovery (which reads that cache) can report another project's login for a directory.
+test("a project whose cached login was rewritten keeps its own row", async () => {
+  const rewritten = () => [
+    account(WORK, { email: "bob@example.com", orgName: "Personal" }),
+    account(PERSONAL, { email: "bob@example.com", orgName: "Personal" }),
+  ];
+  const merged = await createOverview(deps({ discover: async () => rewritten() }))(paseo);
+  assert.equal(merged.accounts.filter((row) => row.registered).length, 1, "without its own login the two read as one");
+
+  const view = await createOverview(
+    deps({
+      discover: async () => rewritten(),
+      profile: async (home) => (home === WORK ? { email: "alice@example.com", orgName: "Acme", orgId: "org-acme" } : null),
+    }),
+  )(paseo);
+  const registered = view.accounts.filter((row) => row.registered);
+  assert.equal(registered.length, 2);
+  assert.equal(registered.find((row) => row.accountIds.includes("work"))?.orgName, "Acme");
+  assert.equal(registered.find((row) => row.accountIds.includes("personal"))?.orgName, "Personal");
+});
+
+test("Reload asks each login again rather than answering from memory", async () => {
+  const refreshes: boolean[] = [];
+  const overview = createOverview(
+    deps({
+      profile: async (_home, refresh) => {
+        refreshes.push(refresh);
+        return null;
+      },
+    }),
+  );
+  await overview(paseo);
+  await overview(paseo, false, true);
+  assert.deepEqual(refreshes, [false, false, true, true]);
 });

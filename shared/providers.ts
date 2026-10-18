@@ -1,41 +1,44 @@
 import { CLAUDE_DIR } from "./naming.ts";
+import { canonical } from "./path.ts";
 
-/** How each provider is moved from one account to another. Claude switches by an injected
- *  long-lived token, so the session keeps its own config directory (transcript, settings,
- *  MCP servers). Codex switches by directory: its refresh tokens rotate, so a copied token
- *  would race the user's own Codex and could revoke the login. */
+/** The accounts this plugin can switch between. */
 export type ProviderId = "claude" | "codex";
-
-export type SwitchKind =
-  /** The account's token is injected; the session keeps whatever directory it already had. */
-  | { kind: "token"; tokenVar: string }
-  /** The account's directory is injected; the provider does its own refreshing inside it. */
-  | { kind: "home"; homeVar: string };
 
 export interface ProviderSpec {
   id: ProviderId;
-  /** The variable naming a config directory, whether or not the switch uses it. */
-  homeVar: string;
-  switch: SwitchKind;
+  /** The variable naming a config directory (transcript, settings, MCP servers). A session
+   *  keeps its own, so switching an account never moves its history. */
+  configVar: string;
+  /** The variable set to an account's directory so the session runs on that account's login.
+   *  Claude reads credentials from a separate store directory, so a switch leaves the session's
+   *  own config directory alone; Codex refreshes its login inside its config directory, so for
+   *  it the two are the same variable. */
+  credVar: string;
+  /** Whether `credVar` must be "" (not the path) for the default directory. Claude's Keychain
+   *  item for the default directory is unsuffixed, which an empty value selects; the path would
+   *  be hashed to a different, empty item and read as logged out. Codex has no such default. */
+  credDefaultEmpty: boolean;
   /** Whether switching is implemented; an unsupported provider is refused everywhere. */
   supported: boolean;
-  /** Whether remaining allowance can be polled. Codex has no usage endpoint (limits come
-   *  only as response headers on live turns), so its rows show `unsupported`. */
+  /** Whether remaining allowance can be polled. Codex has no usage endpoint (limits come only
+   *  as response headers on live turns), so its rows show `unsupported`. */
   meterable: boolean;
 }
 
 export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
   claude: {
     id: "claude",
-    homeVar: "CLAUDE_CONFIG_DIR",
-    switch: { kind: "token", tokenVar: "CLAUDE_CODE_OAUTH_TOKEN" },
+    configVar: "CLAUDE_CONFIG_DIR",
+    credVar: "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+    credDefaultEmpty: true,
     supported: true,
     meterable: true,
   },
   codex: {
     id: "codex",
-    homeVar: "CODEX_HOME",
-    switch: { kind: "home", homeVar: "CODEX_HOME" },
+    configVar: "CODEX_HOME",
+    credVar: "CODEX_HOME",
+    credDefaultEmpty: false,
     supported: true,
     meterable: false,
   },
@@ -55,15 +58,17 @@ export function providerForHome(home: string): ProviderId | null {
   return null;
 }
 
-/** The environment a session opens with for one account. The token branch sets only the
- *  token: the session keeps whatever config directory it would have had, so its transcript,
- *  settings and MCP servers stay put and `--resume` still finds the conversation. The home
- *  branch sets only the directory and ignores any token. */
+/**
+ * The environment a session opens with to run on one account: the account's directory in the
+ * provider's credential variable. The session keeps its own config directory (transcript,
+ * settings, MCP servers) and `--resume` still finds the conversation; only the login changes.
+ * `defaultDir` is the provider's default config directory, reached with an empty value.
+ */
 export function envFor(
   account: { provider: ProviderId; home: string },
-  token: string | null,
+  defaultDir: string,
 ): Record<string, string> {
-  const mechanism = PROVIDERS[account.provider].switch;
-  if (mechanism.kind === "home") return { [mechanism.homeVar]: account.home };
-  return token === null || token === "" ? {} : { [mechanism.tokenVar]: token };
+  const spec = PROVIDERS[account.provider];
+  const value = spec.credDefaultEmpty && canonical(account.home) === canonical(defaultDir) ? "" : account.home;
+  return { [spec.credVar]: value };
 }

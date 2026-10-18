@@ -2,8 +2,8 @@ import { stat } from "node:fs/promises";
 import type { PluginSessionOpenRequest } from "@getpaseo/plugin/server";
 import type { RefusalCode } from "../shared/defaults.ts";
 import { PROVIDERS, envFor, isProviderId } from "../shared/providers.ts";
-import { type Account, type Registry, applyBinding, resolveAccount, tokenKey } from "../shared/registry.ts";
-import { type DefaultDeps, checkDefault, defaultOptions } from "./defaults.ts";
+import { type Account, type Registry, applyBinding, resolveAccount } from "../shared/registry.ts";
+import { checkDefault, defaultOptions } from "./defaults.ts";
 
 /** The part of the session-open request the hook reads. A `Pick` of the SDK type, so an
  *  upstream shape change fails the typecheck instead of quietly reading undefined. */
@@ -18,15 +18,12 @@ export interface HookDeps {
   readRegistry(): Promise<Registry>;
   /** Records the binding of a chat that opened on the provider's default account. */
   writeRegistry(value: Registry): Promise<void>;
-  /** The token filed under a Keychain account (`tokenKey`), or null. Only the token
-   *  mechanism calls this, so a directory switch never risks a Keychain dialog while a
-   *  session starts. */
-  readMintedToken(login: string): Promise<string | null>;
-  /** Whether a config directory exists. Codex refuses to start on a missing `CODEX_HOME`,
-   *  so a stale binding must not be injected. */
+  /** Whether a config directory exists. A session is pointed at a directory; a stale binding
+   *  to a directory that is gone must not be injected. */
   directoryExists(path: string): Promise<boolean>;
-  /** Anthropic's answer to a default's token. Absent: not asked, the token counts as good. */
-  checkToken?: DefaultDeps["checkToken"];
+  /** The provider's default config directory, reached with an empty credential variable
+   *  (see `envFor`). */
+  defaultDir(): string;
   /** Whether the config directory a new chat would run in on its own is logged in, and which
    *  directory that is. Absent, or `loggedIn: null` when it could not be told: the chat is
    *  not refused. */
@@ -103,14 +100,10 @@ async function newChatEnv(
   const refuse = (code: RefusalCode, values: { label?: string; dir?: string }) =>
     new SessionRefused(code, deps.refusalText?.(code, values) ?? `no account for this chat (${code})`);
 
-  const checked = await checkDefault(registry, provider, {
-    readMintedToken: deps.readMintedToken,
-    directoryExists: deps.directoryExists,
-    checkToken: deps.checkToken ?? (async () => "ok"),
-  });
+  const checked = await checkDefault(registry, provider, { directoryExists: deps.directoryExists });
   if (checked.state === "broken") throw refuse(checked.problem, { label: checked.label });
   if (checked.state === "ok") {
-    const env = { ...request.env, ...envFor(checked.account, checked.token) };
+    const env = { ...request.env, ...envFor(checked.account, deps.defaultDir()) };
     await deps.writeRegistry(applyBinding(await deps.readRegistry(), { agentId: request.agentId, account: checked.account.id }));
     return env;
   }
@@ -122,7 +115,8 @@ async function newChatEnv(
   throw refuse(defaultOptions(registry, provider).length > 0 ? "not-set" : "no-accounts", { dir: own.dir });
 }
 
-/** What `account` contributes to a session of `provider`, or undefined when it cannot. */
+/** What `account` contributes to a session of `provider`, or undefined when it cannot. The
+ *  session is pointed at the account's directory, whose own login it then runs on. */
 async function accountEnv(
   account: Account,
   provider: string,
@@ -131,20 +125,8 @@ async function accountEnv(
 ): Promise<Record<string, string> | undefined> {
   if (account.provider !== provider) return undefined;
   if (!PROVIDERS[account.provider].supported) return undefined;
-  const mechanism = PROVIDERS[account.provider].switch;
-  if (mechanism.kind === "home") {
-    // Codex refreshes its own credentials inside the directory it is pointed at, so the
-    // switch is just naming that directory.
-    if (!(await deps.directoryExists(account.home))) return undefined;
-    return { ...request.env, ...envFor(account, null) };
-  }
-  // No token is the normal state of a newly discovered account: the session keeps
-  // whatever login its config directory already has. `tokenLogin` and `tokenOrg` (whose
-  // subscription the token bills, and the Keychain item's key) can differ from the
-  // directory's own login.
-  const key = tokenKey(account);
-  if (key === null) return undefined;
-  const token = await deps.readMintedToken(key);
-  if (token === null) return undefined;
-  return { ...request.env, ...envFor(account, token) };
+  // A stale binding to a directory that is gone: leave the session as Paseo built it rather
+  // than point it at nothing.
+  if (!(await deps.directoryExists(account.home))) return undefined;
+  return { ...request.env, ...envFor(account, deps.defaultDir()) };
 }

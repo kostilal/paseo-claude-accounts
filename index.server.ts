@@ -1,23 +1,19 @@
 import type { PaseoApi } from "./server/paseo.ts";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { execFile } from "node:child_process";
 import { mkdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import {
   connectAccount,
   fetchUsage,
   listAccounts,
   loginAccount,
-  mintToken,
   removeAccount,
   unhideAccount,
 } from "./shared/accounts.ts";
 import { type RefusalCode, getDefaultRpc, refusalText, setDefaultRpc } from "./shared/defaults.ts";
 import { detectLocale, t } from "./shared/i18n.ts";
 import { uniqueId } from "./shared/naming.ts";
-import { parseAuthStatus } from "./shared/parse.ts";
 import { canonical } from "./shared/path.ts";
 import { PROVIDERS, type ProviderId, isProviderId, providerForHome } from "./shared/providers.ts";
 import { type Registry, accountById, registerAccount, removeAccounts, setDefault, unhideHomes } from "./shared/registry.ts";
@@ -25,34 +21,36 @@ import { preferences } from "./shared/settings.ts";
 import { pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
 import { createApiKeyCheck } from "./server/apiKey.ts";
 import { chatRpc, describeAccounts, describeRpc, readChat } from "./server/capabilities.ts";
-import { claudeEnv, findClaude } from "./server/claude.ts";
-import { cachedTokenCheck, checkDefault, defaultOptions } from "./server/defaults.ts";
+import { checkDefault, defaultOptions } from "./server/defaults.ts";
 import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } from "./server/discover.ts";
 import { directoryExists, sessionEnv } from "./server/hook.ts";
 import { openLogin } from "./server/login.ts";
-import { finishMint, tokenStatus, validateToken } from "./server/mint.ts";
-import { createMints } from "./server/mintTerminal.ts";
-import { readMintedToken, writeMintedToken } from "./server/mintedToken.ts";
+import { migrateFromTokens } from "./server/migrate.ts";
 import { createOverview, createUsageRow } from "./server/overview.ts";
 import { pillStateFor } from "./server/pill.ts";
+import { createProfiles } from "./server/profile.ts";
 import { createSessionDirs } from "./server/sessionDir.ts";
 import { createProjects } from "./server/projects.ts";
 import { reloadAgent } from "./server/reload.ts";
-import { MINTS_DIR, STATE_FILE, loadRegistry, readRegistry, writeRegistry } from "./server/store.ts";
+import { STATE_FILE, loadRegistry, readRegistry, writeRegistry } from "./server/store.ts";
 import { switchAccount } from "./server/switchAccount.ts";
 import { listChats, switchAll } from "./server/switchAll.ts";
 import { createUsage } from "./server/usage.ts";
-
-const run = promisify(execFile);
 
 export default function contribute(server: PluginServerContext) {
   const settings = server.registerSettings(preferences);
   const projects = createProjects();
   const usage = createUsage();
+  // Who each account's own login belongs to; discovery's answer comes from a cache that chats
+  // running on another account rewrite.
+  const profiles = createProfiles();
   const discovery = createDiscovery();
   const log = (line: string) => console.error(line);
   const overridingVar = createApiKeyCheck();
   const sessionDir = createSessionDirs();
+
+  // One-time upgrade from 0.1.x: delete the old switching keys and drop their registry fields.
+  void migrateFromTokens(STATE_FILE, log);
 
   /** Where a chat that nobody has switched runs: the config directory the daemon would
    *  hand Claude Code, which is `~/.claude` unless the daemon itself was started with
@@ -71,7 +69,6 @@ export default function contribute(server: PluginServerContext) {
   }
 
   const persist = (registry: Registry) => writeRegistry(registry, STATE_FILE, log);
-  const checkToken = cachedTokenCheck((token) => tokenStatus(token));
 
   /** The language the daemon writes messages in: the plugin's setting, else the daemon's. */
   async function serverStrings() {
@@ -86,6 +83,7 @@ export default function contribute(server: PluginServerContext) {
     projects,
     usage,
     defaultDir,
+    profile: (home, refresh) => profiles.identityOf(home, defaultDir(), { refresh }),
     log,
   });
 
@@ -112,29 +110,6 @@ export default function contribute(server: PluginServerContext) {
     return account === null ? null : { home: account.home, provider: account.provider };
   }
 
-  const mints = createMints({
-    dir: MINTS_DIR,
-    log,
-    finish: (home, transcript) =>
-      finishMint(home, transcript, {
-        validate: (token) => validateToken(token),
-        whoami: async (token) => {
-          const { stdout } = await run(await findClaude(), ["auth", "status", "--json"], {
-            env: { ...claudeEnv(home), CLAUDE_CODE_OAUTH_TOKEN: token },
-            timeout: 15_000,
-          });
-          return parseAuthStatus(stdout).email;
-        },
-        identify: (dir) => discovery.identify(dir, true),
-        writeToken: (login, token) => writeMintedToken(login, token),
-        readRegistry,
-        writeRegistry: persist,
-      }),
-  });
-  // Pick up any mint that finished while the plugin was not running, and clear old ones.
-  void mints.adopt().catch((error: unknown) => log(`accounts: mint check failed: ${String(error)}`));
-  const adopt = () => mints.adopt().catch((error: unknown) => log(`accounts: mint check failed: ${String(error)}`));
-
   /** A new directory for an account added from the screen, named so discovery finds it. */
   async function freshHome(provider: ProviderId): Promise<string> {
     const stem = provider === "codex" ? ".codex-account-" : ".claude-account-";
@@ -149,7 +124,6 @@ export default function contribute(server: PluginServerContext) {
   }
 
   server.handle(listAccounts, async (input, { paseo }) => {
-    await adopt();
     const [overview, override] = await Promise.all([overviewFor(paseo, input.refresh, input.force), overridingVar(paseo)]);
     return { ...overview, overridingVar: override };
   });
@@ -222,21 +196,7 @@ export default function contribute(server: PluginServerContext) {
     }
   });
 
-  server.handle(mintToken, async (input, { paseo }) => {
-    const home = canonical(input.home);
-    const account = (await readRegistry()).accounts.find((candidate) => candidate.home === home);
-    if (account === undefined || PROVIDERS[account.provider].switch.kind !== "token") {
-      return { terminal: "", code: "unknown-account" as const, error: "" };
-    }
-    try {
-      return await mints.open(paseo, home, account.label, await findClaude());
-    } catch (error) {
-      return { terminal: "", code: "" as const, error: error instanceof Error ? error.message : String(error) };
-    }
-  });
-
   server.handle(switchAccountRpc, async (input) => {
-    await adopt();
     const result = await switchAccount(
       { agentId: input.agentId, accountId: input.account },
       {
@@ -244,7 +204,6 @@ export default function contribute(server: PluginServerContext) {
         writeRegistry: persist,
         exists: directoryExists,
         identify: (home) => discovery.identify(home),
-        readMintedToken: (login) => readMintedToken(login),
         reload: (agentId) => reloadAgent(agentId),
       },
     );
@@ -254,13 +213,11 @@ export default function contribute(server: PluginServerContext) {
   });
 
   server.handle(switchAllRpc, async (input, { paseo }) => {
-    await adopt();
     const result = await switchAll(input.account, {
       readRegistry,
       writeRegistry: persist,
       exists: directoryExists,
       identify: (home) => discovery.identify(home),
-      readMintedToken: (login) => readMintedToken(login),
       chats: () => listChats(paseo),
       reload: (agentId) => reloadAgent(agentId),
     });
@@ -271,7 +228,6 @@ export default function contribute(server: PluginServerContext) {
   });
 
   server.handle(pillStateRpc, async (input, { paseo }) => {
-    await adopt();
     const override = await overridingVar(paseo);
     const state = await pillStateFor(
       { agentId: input.agentId, cwd: input.cwd, manual: input.manual },
@@ -285,6 +241,7 @@ export default function contribute(server: PluginServerContext) {
           if (cached !== null && !usage.stale(home)) return cached;
           return usage.measure(home, defaultDir(), manual);
         },
+        profile: (home) => profiles.identityOf(home, defaultDir()),
       },
     );
     return { ...state, overridingVar: override };
@@ -293,11 +250,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(getDefaultRpc, async (input) => {
     const registry = await readRegistry();
     const options = defaultOptions(registry, input.provider);
-    const checked = await checkDefault(registry, input.provider, {
-      readMintedToken: (login) => readMintedToken(login),
-      directoryExists,
-      checkToken,
-    });
+    const checked = await checkDefault(registry, input.provider, { directoryExists });
     if (checked.state === "unset") return { account: "", problem: "" as const, label: "", options };
     if (checked.state === "ok") return { account: checked.account.id, problem: "" as const, label: checked.account.label, options };
     return { account: checked.id, problem: checked.problem, label: checked.label, options };
@@ -313,11 +266,7 @@ export default function contribute(server: PluginServerContext) {
       return { code: "" as const };
     }
     // Refuse a default the hook could not use, before anything is written.
-    const checked = await checkDefault(setDefault(read.registry, input.provider, input.account), input.provider, {
-      readMintedToken: (login) => readMintedToken(login),
-      directoryExists,
-      checkToken,
-    });
+    const checked = await checkDefault(setDefault(read.registry, input.provider, input.account), input.provider, { directoryExists });
     if (checked.state === "broken") return { code: checked.problem };
     await persist(setDefault(read.registry, input.provider, input.account));
     return { code: "" as const };
@@ -333,9 +282,8 @@ export default function contribute(server: PluginServerContext) {
     const env = await sessionEnv(input.request, {
       readRegistry,
       writeRegistry: persist,
-      readMintedToken: (login) => readMintedToken(login),
       directoryExists,
-      checkToken,
+      defaultDir,
       // Where a new chat would run without the plugin: an explicit directory, else the
       // project's, else the daemon's. Asked again past the cache before refusing, in case
       // the person has just logged in.
@@ -350,7 +298,5 @@ export default function contribute(server: PluginServerContext) {
     return env === undefined ? undefined : { ...input.request, env };
   });
 
-  return () => {
-    mints.stop();
-  };
+  return () => {};
 }

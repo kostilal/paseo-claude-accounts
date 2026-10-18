@@ -3,8 +3,9 @@ import { PROVIDERS } from "../shared/providers.ts";
 import { accountById, type Registry, resolveAccount } from "../shared/registry.ts";
 import type { PillState } from "../shared/switch.ts";
 import { isClaudeNotFound } from "./discover.ts";
-import { chooseUsageHome, groupByLogin, type LoginCandidate, preferTokenHolder } from "./groupLogins.ts";
+import { chooseUsageHome, groupByLogin, type LoginCandidate } from "./groupLogins.ts";
 import { usageForLogin, usageOrder } from "./groupUsage.ts";
+import { type ProfileIdentity, ownLogin } from "./profile.ts";
 import type { UsageResult } from "./usage.ts";
 
 export interface PillInput {
@@ -25,6 +26,9 @@ export interface PillDeps {
   authorised(home: string): boolean;
   /** The allowance for one account's directory, or a blank result when it is not known. */
   usageFor(home: string, manual: boolean): Promise<UsageResult>;
+  /** Who a Claude directory's own login belongs to, asked of Anthropic; see server/profile.ts.
+   *  Absent, or null: the identity `identify` reported stands. */
+  profile?(home: string): Promise<ProfileIdentity | null>;
 }
 
 /** A logged-out login's usage: nothing to read. */
@@ -66,26 +70,21 @@ export async function pillStateFor(input: PillInput, deps: PillDeps): Promise<Pi
   // rather than as a column of "Not logged in". Other failures reject the call.
   let claudeMissing = false;
   const candidates: LoginCandidate[] = await Promise.all(
-    registry.accounts.map(async (account) => ({
-      accountId: account.id,
-      home: account.home,
-      identity: await deps.identify(account.home).catch((error: unknown) => {
+    registry.accounts.map(async (account) => {
+      const discovered = await deps.identify(account.home).catch((error: unknown) => {
         if (!isClaudeNotFound(error)) throw error;
         claudeMissing = true;
         return unidentified;
-      }),
-    })),
+      });
+      return { accountId: account.id, home: account.home, identity: await ownLogin(account, discovered, deps.profile) };
+    }),
   );
 
-  const hasToken = (id: string) => {
-    const login = accountById(registry, id)?.tokenLogin;
-    return login !== undefined && login !== "";
-  };
   const groups = groupByLogin(candidates, {
     boundAccountId: bound?.id ?? null,
     resolvedAccountId: current?.id ?? null,
     projectAccountId,
-  }).map((group) => preferTokenHolder(group, hasToken));
+  });
 
   const accounts = await Promise.all(
     groups.map(async (group) => {
@@ -105,11 +104,6 @@ export async function pillStateFor(input: PillInput, deps: PillDeps): Promise<Pi
         label: landsOnAccount?.label ?? landsOn,
         provider: landsOnAccount?.provider ?? "claude",
         home: landsOnAccount?.home ?? "",
-        // Whether a press can work: a directory switch needs a login, a token switch a token.
-        hasToken:
-          mechanism?.switch.kind === "home"
-            ? group.loggedIn
-            : group.switchTo !== "" && hasToken(group.switchTo),
         key: group.key,
         email: group.email,
         orgName: group.orgName,

@@ -92,7 +92,7 @@ export function weekLine(account: PillAccount, now: number, strings: Strings): s
 /** Whether another account could take over now (the green dot on an exhausted pill). */
 export function hasSpare(state: PillState): boolean {
   return state.accounts.some((account) => {
-    if (account.current || !account.loggedIn || !account.hasToken) return false;
+    if (account.current || !account.loggedIn) return false;
     const tightest = tightestOf(account.fiveHour, account.sevenDay);
     return tightest === null || tightest < 90;
   });

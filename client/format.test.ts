@@ -12,7 +12,6 @@ function account(over: Partial<PillAccount> = {}): PillAccount {
     label: "work",
     provider: "claude",
     home: "/w/work",
-    hasToken: true,
     key: "k",
     email: "alice@example.com",
     orgName: "",
@@ -72,10 +71,10 @@ test("the week has its own line with its reset, and none when there is nothing t
   assert.equal(weekLine(account({ loggedIn: false }), now, strings), "");
 });
 
-test("a spare is another account with a token and room left", () => {
+test("a spare is another logged-in account with room left", () => {
   const state = (accounts: PillAccount[]): PillState => ({ currentId: "x", tightest: 100, accounts, error: "", overridingVar: "" });
-  assert.equal(hasSpare(state([account({ current: true }), account({ hasToken: true })])), true);
-  assert.equal(hasSpare(state([account({ current: true }), account({ hasToken: false })])), false);
+  assert.equal(hasSpare(state([account({ current: true }), account({ loggedIn: true })])), true);
+  assert.equal(hasSpare(state([account({ current: true }), account({ loggedIn: false })])), false);
   assert.equal(
     hasSpare(state([account({ current: true }), account({ fiveHour: { utilization: 95, resetsAt: "" } })])),
     false,

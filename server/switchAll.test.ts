@@ -5,14 +5,7 @@ import type { Registry } from "../shared/registry.ts";
 import { type Chat, type SwitchAllDeps, listChats, switchAll } from "./switchAll.ts";
 
 const work = { id: "work", label: "Work", provider: "claude" as const, home: "/w/acme/.claude-data" };
-const personal = {
-  id: "personal",
-  label: "Personal",
-  provider: "claude" as const,
-  home: "/Users/me/.claude",
-  tokenLogin: "alice@example.com",
-  tokenOrg: "org-personal",
-};
+const personal = { id: "personal", label: "Personal", provider: "claude" as const, home: "/Users/me/.claude" };
 const codex = { id: "codex", label: "Codex", provider: "codex" as const, home: "/Users/me/.codex" };
 
 const CHATS: Chat[] = [
@@ -37,7 +30,6 @@ function deps(log: string[], overrides: Partial<SwitchAllDeps> = {}) {
     },
     exists: async () => true,
     identify: async () => ({ loggedIn: true, email: "", orgName: "", subscriptionType: "" }),
-    readMintedToken: async () => "sk-ant-oat01-example",
     chats: async () => CHATS,
     reload: async (agentId) => {
       log.push(`reload ${agentId}`);
@@ -88,8 +80,9 @@ test("a chat of another provider keeps its account and is not restarted", async 
 
 test("a target the hook could not act on is refused before anything is touched", async () => {
   const log: string[] = [];
-  const result = await switchAll("work", deps(log).deps);
-  assert.equal(result.code, "no-token");
+  const loggedOut = deps(log, { identify: async () => ({ loggedIn: false, email: "", orgName: "", subscriptionType: "" }) });
+  const result = await switchAll("work", loggedOut.deps);
+  assert.equal(result.code, "not-logged-in");
   assert.deepEqual(log, []);
   assert.equal((await switchAll("gone", deps(log).deps)).code, "unknown-account");
   assert.deepEqual(log, []);
@@ -152,7 +145,7 @@ test("the account becomes its provider's default, other providers' defaults stay
 
 test("a refused move leaves the default alone", async () => {
   const log: string[] = [];
-  const fake = deps(log);
+  const fake = deps(log, { identify: async () => ({ loggedIn: false, email: "", orgName: "", subscriptionType: "" }) });
   await switchAll("work", fake.deps);
   assert.equal(fake.stored().defaults, undefined);
 });

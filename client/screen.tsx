@@ -9,7 +9,6 @@ import {
   fetchUsage,
   listAccounts,
   loginAccount,
-  mintToken,
   removeAccount,
   unhideAccount,
   type AccountView,
@@ -157,8 +156,6 @@ function LoginCard({
   onShowUsage,
   logIn,
   onLogIn,
-  mint,
-  onMint,
   deleting,
   moving,
 }: {
@@ -169,8 +166,6 @@ function LoginCard({
   onShowUsage: () => void;
   logIn: RowMutation<{ code: "" | "no-workspace" | "unknown-account"; error: string; terminal: string }>;
   onLogIn: () => void;
-  mint: RowMutation<{ code: "" | "no-workspace" | "unknown-account"; error: string; terminal: string }>;
-  onMint: () => void;
   deleting: DeleteState;
   moving: MoveAllState;
 }) {
@@ -194,8 +189,7 @@ function LoginCard({
     if (m.data.error !== "") return { text: `${failed} ${m.data.error}`, tone: "bad" };
     return null;
   };
-  const loginState = terminalNotice(logIn, row.id, strings.mintFailed);
-  const mintState = terminalNotice(mint, row.home, strings.mintFailed);
+  const loginState = terminalNotice(logIn, row.id, strings.loginFailed);
 
   const resetSuffix = (bar: { resetsAt: string } | null) =>
     bar !== null && Number.isFinite(Date.parse(bar.resetsAt))
@@ -216,7 +210,6 @@ function LoginCard({
         </View>
         <View style={{ flexShrink: 0, flexDirection: "row", gap: 6 }}>
           {row.isDefault && <Chip theme={theme} label={strings.defaultAccount} />}
-          {row.loggedIn && row.hasToken && <Chip theme={theme} label={strings.tokenReady} selected />}
         </View>
       </View>
 
@@ -254,16 +247,6 @@ function LoginCard({
         {row.loggedIn && (row.usage === "unauthorised" || row.usage === "error") && revealFailure === null && (
           <Button theme={theme} label={strings.showUsage} variant="ghost" disabled={showUsage.isPending} onPress={onShowUsage} />
         )}
-        {row.loggedIn && PROVIDERS[row.provider as ProviderId]?.switch.kind === "token" && (
-          <Button
-            theme={theme}
-            label={row.hasToken ? strings.mintTokenAgain : strings.mintToken}
-            icon="KeyRound"
-            variant="ghost"
-            disabled={mint.isPending}
-            onPress={onMint}
-          />
-        )}
         {(!row.loggedIn || row.usage === "expired") && (
           <Button theme={theme} label={strings.logIn} variant="ghost" disabled={logIn.isPending} onPress={onLogIn} />
         )}
@@ -271,7 +254,6 @@ function LoginCard({
         <DeleteButton theme={theme} strings={strings} state={deleting} />
       </View>
       <DeleteConfirm theme={theme} strings={strings} state={deleting} question={strings.deleteConfirm} />
-      {mintState !== null && <Banner theme={theme} tone={mintState.tone} text={mintState.text} />}
       {loginState !== null && <Banner theme={theme} tone={loginState.tone} text={loginState.text} />}
     </Card>
   );
@@ -283,7 +265,6 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
   const askUsage = useRpc(fetchUsage);
   const startLogin = useRpc(loginAccount);
   const doConnect = useRpc(connectAccount);
-  const doMint = useRpc(mintToken);
   const doRemove = useRpc(removeAccount);
   const doUnhide = useRpc(unhideAccount);
   const doMoveAll = useRpc(switchAllRpc);
@@ -337,21 +318,11 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
     onSuccess: invalidate,
   });
 
-  const mint = useMutation({
-    mutationFn: (home: string) => doMint({ home }),
-    onSuccess: invalidate,
-  });
-
   const add = useMutation({
     // Use the suggestion's own provider, so a discovered `~/.codex-*` is not registered as Claude.
     mutationFn: (home: string) =>
       doConnect({ provider: providerForHome(home) ?? "claude", home, label: "", login: false }),
-    // An account is added to be switched to, so a token account goes straight on to its
-    // switching key: one browser approval instead of a second button to find.
-    onSuccess: (result, home) => {
-      invalidate();
-      if (result.code === "" && PROVIDERS[providerForHome(home) ?? "claude"].switch.kind === "token") mint.mutate(home);
-    },
+    onSuccess: invalidate,
   });
 
   // Keyed by row `id` so only the pressed row asks. A registered row is a login and may span
@@ -412,9 +383,8 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
     else if (mine && moveAll.isError) label = strings.moveAllError;
     else if (mine && moveAll.data !== undefined) label = moveAllSummary(moveAll.data, strings);
     else if (armed === row.id) label = strings.moveAllConfirm;
-    const switchable = row.hasToken || PROVIDERS[row.provider as ProviderId]?.switch.kind === "home";
     return {
-      available: row.registered && row.loggedIn && row.switchTo !== "" && switchable,
+      available: row.registered && row.loggedIn && row.switchTo !== "",
       label,
       armed: armed === row.id,
       pending: moveAll.isPending,
@@ -526,8 +496,6 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
                   onShowUsage={() => showUsage.mutate(row.switchTo)}
                   logIn={logIn}
                   onLogIn={() => logIn.mutate(row.id)}
-                  mint={mint}
-                  onMint={() => mint.mutate(row.home)}
                   deleting={deleteState(row)}
                   moving={moveAllState(row)}
                 />

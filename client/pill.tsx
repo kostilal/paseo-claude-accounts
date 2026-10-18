@@ -10,9 +10,8 @@ import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { fetchUsage, mintToken } from "../shared/accounts.ts";
+import { fetchUsage } from "../shared/accounts.ts";
 import { loginLabel } from "../shared/identity.ts";
-import { PROVIDERS, type ProviderId } from "../shared/providers.ts";
 import { type Strings, t } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { type PillAccount, type SwitchCode, pillStateRpc, switchAccountRpc } from "../shared/switch.ts";
@@ -38,8 +37,6 @@ function messageFor(code: SwitchCode, strings: Strings): string {
       return strings.switchMissingDirectory;
     case "unsupported-provider":
       return strings.switchUnsupportedProvider;
-    case "no-token":
-      return strings.switchNoToken;
     case "not-logged-in":
       return strings.switchNotLoggedIn;
     case "unknown-account":
@@ -132,7 +129,7 @@ function AccountPillIcon(
 
 /**
  * The pill's popover: logged-in accounts with their usage. Tapping another account switches
- * this chat onto it; tapping one without a token mints one instead (opens a terminal).
+ * this chat onto it.
  */
 export function AccountPopover(props: PluginButtonContentProps) {
   const { theme, layout, workspaceId, close } = props;
@@ -141,7 +138,6 @@ export function AccountPopover(props: PluginButtonContentProps) {
   const askPill = useRpc(pillStateRpc);
   const askUsage = useRpc(fetchUsage);
   const doSwitch = useRpc(switchAccountRpc);
-  const doMint = useRpc(mintToken);
   const queries = useQueryClient();
   const cwd = useAgent(agentId, (agent) => agent.cwd);
   const status = useAgent(agentId, (agent) => agent.status);
@@ -162,12 +158,6 @@ export function AccountPopover(props: PluginButtonContentProps) {
     onSuccess: () => queries.invalidateQueries({ queryKey: key }),
   });
 
-  const mint = useMutation({
-    mutationFn: (home: string) => doMint({ home }),
-    onSuccess: () => queries.invalidateQueries({ queryKey: key }),
-  });
-
-
   // A press while the agent is working arms the row; a second press switches. Rows stay
   // pressable through a turn because noticing a limit happens while the agent is working.
   const [armed, setArmed] = useState<string | null>(null);
@@ -175,17 +165,7 @@ export function AccountPopover(props: PluginButtonContentProps) {
     if (!busy) setArmed(null);
   }, [busy]);
 
-  /** Whether this provider switches via a minted token (as opposed to a config directory). */
-  function canMint(account: PillAccount): boolean {
-    return PROVIDERS[account.provider as ProviderId]?.switch.kind === "token";
-  }
-
   function pressRow(account: PillAccount) {
-    if (!account.hasToken) {
-      // For a directory switch this means nobody is logged in; that is fixed from the Accounts screen.
-      if (canMint(account)) mint.mutate(account.home);
-      return;
-    }
     if (busy && armed !== account.switchTo) {
       setArmed(account.switchTo);
       return;
@@ -214,18 +194,6 @@ export function AccountPopover(props: PluginButtonContentProps) {
     />
   );
 
-  const mintNotice = (): { text: string; tone: NoticeTone } | null => {
-    // Only failures: the terminal itself says what to do and when it is done.
-    if (mint.variables === undefined || mint.isPending) return null;
-    if (mint.isError) return { text: `${strings.mintFailed} ${rawErrorText(mint.error)}`, tone: "bad" };
-    if (mint.data === undefined) return null;
-    if (mint.data.code === "no-workspace") return { text: strings.noWorkspace, tone: "bad" };
-    if (mint.data.code === "unknown-account") return { text: strings.usageUnknownAccount, tone: "bad" };
-    if (mint.data.error !== "") return { text: `${strings.mintFailed} ${mint.data.error}`, tone: "bad" };
-    return null;
-  };
-  const minted = mintNotice();
-
   const rows = data === undefined ? [] : data.accounts.filter((account) => account.loggedIn);
   const ordered = [...rows.filter((row) => row.current), ...rows.filter((row) => !row.current)];
   // The current account's usage could not be read: offer a manual reveal under the list.
@@ -252,7 +220,7 @@ export function AccountPopover(props: PluginButtonContentProps) {
               {ordered.map((account) => {
                 const tightest = tightestOf(account.fiveHour, account.sevenDay);
                 const title = loginTitle(account, strings);
-                const pressable = !account.current && !mint.isPending;
+                const pressable = !account.current;
                 const tone =
                   tightest !== null && tightest >= 70 ? theme.colors[meterTone(tightest)] : theme.colors.foregroundMuted;
                 return (
@@ -280,7 +248,7 @@ export function AccountPopover(props: PluginButtonContentProps) {
                         backgroundColor: account.current ? theme.colors.surface2 : theme.colors.surface1,
                       }}
                     >
-                      <AccountRing theme={theme} size={30} provider={account.provider} tightest={tightest} dim={!account.hasToken && !account.current} />
+                      <AccountRing theme={theme} size={30} provider={account.provider} tightest={tightest} />
                       <View style={{ flex: 1, gap: 2 }}>
                         <Text style={{ ...typeScale.body, fontWeight: "600", color: theme.colors.foreground }} numberOfLines={1}>
                           {title}
@@ -293,11 +261,6 @@ export function AccountPopover(props: PluginButtonContentProps) {
                             {weekLine(account, now, strings)}
                           </Text>
                         )}
-                        {!account.current && !account.hasToken && (
-                          <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
-                            {canMint(account) ? strings.noTokenTap : strings.pillNotLoggedIn}
-                          </Text>
-                        )}
                         {account.usage === "expired" && (
                           <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={2}>
                             {strings.usageExpired}
@@ -306,13 +269,9 @@ export function AccountPopover(props: PluginButtonContentProps) {
                       </View>
                       {account.current ? (
                         <Icon name="Check" size={16} color={theme.colors.accent} />
-                      ) : pressable ? (
-                        <Icon
-                          name={account.hasToken ? "ChevronRight" : canMint(account) ? "KeyRound" : "LogIn"}
-                          size={16}
-                          color={theme.colors.foregroundMuted}
-                        />
-                      ) : null}
+                      ) : (
+                        <Icon name="ChevronRight" size={16} color={theme.colors.foregroundMuted} />
+                      )}
                     </Pressable>
                     {armed === account.switchTo && <Banner theme={theme} tone="warn" text={strings.switchBusy} />}
                   </View>
@@ -338,7 +297,6 @@ export function AccountPopover(props: PluginButtonContentProps) {
           <Skeleton theme={theme} height={56} />
         </View>
       )}
-      {minted !== null && <Banner theme={theme} tone={minted.tone} text={minted.text} />}
       {notice !== null && <Banner theme={theme} tone={notice.tone} text={notice.text} />}
     </View>
   );

@@ -54,7 +54,6 @@ function fakeRegistry() {
     },
     exists: async () => true,
     identify: async () => ({ loggedIn: true, email: "", orgName: "", subscriptionType: "" }),
-    readMintedToken: async () => "sk-ant-oat01-example",
   };
   return { deps, log, stored: () => stored };
 }

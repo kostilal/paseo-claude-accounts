@@ -37,8 +37,6 @@ export const accountView = z.object({
   /** The account id a press switches to, chosen deterministically by the server. Empty for
    *  a suggestion, and for a registered row exactly when `loggedIn` is false. */
   switchTo: z.string().default(""),
-  /** Whether `switchTo` has a minted token recorded, which a token switch requires. */
-  hasToken: z.boolean().default(false),
   /** Whether new chats of this provider open on this login ("Move all chats here" chose it). */
   isDefault: z.boolean().default(false),
   usage: usageState.default("unauthorised"),
@@ -159,19 +157,6 @@ export const unhideAccount = defineRpc({
     restored: z.array(z.string()).default([]),
     /** `registry-unreadable`: as for `accounts.remove`. */
     code: z.enum(["", "registry-unreadable"]).default(""),
-    error: z.string().default(""),
-  }),
-});
-
-/** Opens a Paseo terminal running `claude setup-token` for `home`. The token never crosses
- *  this RPC: the terminal stores it in the Keychain and the daemon picks it up on a later
- *  read (server/mintTerminal.ts). Only "a terminal started" is reported. */
-export const mintToken = defineRpc({
-  name: "accounts.mint-token",
-  input: z.object({ home: z.string() }),
-  output: z.object({
-    terminal: z.string().default(""),
-    code: z.enum(["", "no-workspace", "unknown-account"]).default(""),
     error: z.string().default(""),
   }),
 });

@@ -14,8 +14,8 @@ composer: the session restarts on that account and the conversation carries on.
   a turn is left alone rather than cut off.
 - **Default for new chats.** Settings → Plugins → Claude Accounts picks the account every new chat
   starts on; existing chats keep theirs. A new chat is not started when that account cannot be
-  used (removed, no switching key, key expired or revoked), or when no default is set and the
-  chat's own folder has no login: Paseo shows what to choose instead of an auth error.
+  used (removed, or its folder is gone), or when no default is set and the chat's own folder has no
+  login: Paseo shows what to choose instead of an auth error.
 
 <p>
   <img src="assets/pill.png" alt="The account pill and its popover above a chat composer" width="400">
@@ -24,7 +24,7 @@ composer: the session restarts on that account and the conversation carries on.
 
 ## Requirements
 
-- macOS (tokens and usage credentials live in the login Keychain)
+- macOS (logins live in the login Keychain)
 - Paseo 0.11 or newer, with plugins enabled (Settings → Plugins)
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) installed
 
@@ -44,16 +44,13 @@ If `paseo` is not on your PATH, it is at `/Applications/Paseo.app/Contents/Resou
 1. **Add your accounts.** Open **Accounts**. Config directories that are already logged in show up
    under *Found on this machine*; press **Add** on each one you want. To add a subscription you
    have not used from this Mac yet, press **Add account**: a terminal opens `claude auth login`
-   in a new `~/.claude-account-N` directory.
-2. **Approve the switching key.** Adding an account opens a terminal running `claude setup-token`;
-   approve in the browser with the account and organisation that row is signed in to. The token is
-   checked and saved to the Keychain, and the terminal tells you when it is done. A key approved
-   for another organisation is refused and nothing is saved: switch claude.ai to the right
-   organisation and try again. If the terminal was closed early, or for an account added with
-   **Add account**, press **Issue switching key** on it (or tap it in the pill).
-3. **Switch.** In any Claude chat, press the pill and pick an account. If the agent is in the
+   in a new `~/.claude-account-N` directory. Log in there and the account appears by itself.
+2. **Switch.** In any Claude chat, press the pill and pick an account. If the agent is in the
    middle of a turn, the first press warns that the turn will be interrupted and the second press
    switches.
+
+That is all: one login per account, the same login the account's usage is read from. There is no
+second step and no separate switching key.
 
 ## How it works
 
@@ -67,15 +64,19 @@ finds:
   per project
 
 Several directories signed in to the same login (same email and organisation) are shown as one
-row, because they share one allowance.
+row, because they share one allowance. Who each directory is logged in as is asked of Anthropic
+(`/api/oauth/profile`) with that directory's own login, not read from the account cached in its
+`.claude.json`: Claude Code rewrites that cache to whatever login a chat in the folder runs on, so a
+project whose chats were moved to another account would otherwise read as that account.
 
-**A switch injects a token, not a directory.** Each account gets a long-lived token from
-`claude setup-token`, stored in the Keychain under service `paseo-claude-accounts`. Switching a
-chat records the choice for that chat and restarts its session with `paseo agent reload`. When the
-session reopens, the plugin's `agent.session_open` hook adds `CLAUDE_CODE_OAUTH_TOKEN` to its
-environment. Nothing else changes: the session keeps whatever config directory it had, so the
-transcript is where `--resume` looks for it, and the project's settings, permissions and MCP
-servers stay in place. Chats you never switched are left alone.
+**A switch points the session at the account's login, not its directory.** Switching a chat records
+the choice for that chat and restarts its session with `paseo agent reload`. When the session
+reopens, the plugin's `agent.session_open` hook sets `CLAUDE_SECURESTORAGE_CONFIG_DIR` to the
+account's directory, so Claude Code reads that account's login from the Keychain while the session
+keeps its own config directory — the transcript is where `--resume` looks for it, and the project's
+settings, permissions and MCP servers stay in place. The same login is what the account's usage is
+read from, so the meter and the chat can never drift onto different accounts. Chats you never
+switched are left alone.
 
 If the restart fails, the choice is rolled back, so the pill never shows an account the chat is not
 actually running on.
@@ -96,15 +97,14 @@ The endpoint rate-limits aggressively; on a 429 the last reading is kept until t
 | What | Where |
 |---|---|
 | Accounts, per-chat choices, hidden directories | `~/.paseo-claude-accounts/accounts.json` |
-| Switching tokens | Keychain, service `paseo-claude-accounts`, account = `<login email>/<organisation id>` (tokens saved by 0.1.1 and earlier: the email alone) |
-| `setup-token` transcripts while a token is being saved | `~/.paseo-claude-accounts/mints/`, mode 0700, deleted as soon as the token is read |
+| Each account's login | Claude Code's own Keychain item for that config directory; the plugin reads it, never writes it |
 
-Tokens are never written to the state file, logged, or sent to the app. They are passed to
-`security` on stdin, not on the command line. A switched session has its token in its process
-environment, which on macOS is readable only by your user and root.
+The plugin keeps no secret of its own: it stores no tokens, and the state file holds only account
+labels, directories and chat choices. A switched session names the account's directory in its
+process environment; Claude Code reads the login from the Keychain itself.
 
-**Delete** on the Accounts screen only forgets an account: its directory, login and Keychain items
-stay. **Show hidden** brings it back.
+**Delete** on the Accounts screen only forgets an account: its directory and login stay.
+**Show hidden** brings it back.
 
 ## Settings
 
@@ -119,20 +119,19 @@ With [Paseo God Mode](https://github.com/devXpro/paseo-god-mode-plugin) 0.10 or 
 read the accounts and their usage, have usage measured now, and move one chat or every chat to an
 account. The plugin describes this itself through `meta.describe` (`paseo.capabilities/1`). Both
 moves are read back to you before they run, naming the chat from Paseo's own data, and a refused
-switch is reported as not done. Adding, deleting, logging in and switching keys are not offered.
+switch is reported as not done. Adding, deleting and logging in are not offered.
 
 ## Limitations
 
-- **macOS only.**
+- **macOS only.** A session reads its login from the Keychain by directory, which the
+  `CLAUDE_SECURESTORAGE_CONFIG_DIR` variable redirects; the switch is built on that.
 - **A switch restarts the session**, which ends a turn in progress.
-- **Tokens from `setup-token` cannot read usage.** An account's meter comes from a config directory
-  signed in to the same login, so a token is only accepted for the organisation that directory is
-  signed in to; otherwise the meter would show an allowance the token does not spend.
-- **Revoked tokens are not detected in advance.** A chat switched to one fails on its next turn;
-  press **Renew switching key** on that account.
+- **A switched chat shares the account's rotating login.** It is the same login the directory uses,
+  refreshed in place, so chats never fight over a copied token — but logging that account out (or
+  renaming its folder) logs out every chat on it until it logs in again.
 - **API keys win.** If `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` or
   `CLAUDE_CODE_USE_VERTEX` is set in the environment Paseo starts Claude Code with, Claude Code
-  ignores the account token. The plugin shows a warning when it finds one in the daemon's
+  ignores the account login. The plugin shows a warning when it finds one in the daemon's
   environment or in Paseo's Claude provider settings; a key exported by a custom launch command
   cannot be detected.
 - **Codex** (`~/.codex`, `~/.codex-*`) is supported by pointing the chat at another `CODEX_HOME`.
@@ -145,14 +144,13 @@ switch is reported as not done. Adding, deleting, logging in and switching keys 
 `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/.claude/local` and `~/.npm-global/bin`,
 then PATH. A daemon started from the Dock does not get your shell's PATH.
 
-**"That account has no switching key yet."** Press **Issue switching key** on it.
-
 **A switch did nothing.** Check `paseo plugin logs claude-accounts`. The hook logs one line when it
-leaves a session alone, for example when a Keychain dialog is waiting.
+leaves a session alone, for example when the account's directory is gone.
 
-**A switch lands on the other organisation of the same email.** Before 0.1.2 tokens were filed
-under the email alone, so a personal plan and a Team seat on one address shared one token. Press
-**Renew switching key** on each of them.
+**Upgrading from 0.1.x.** The old per-account switching keys are no longer used; the plugin deletes
+them from the Keychain and drops them from the state file on its first run. Each account now runs on
+its directory's own login, so no action is needed — if an account was only ever switchable through a
+key and its directory was never logged in, log in to it once on the Accounts screen.
 
 **Every plugin fails with `Module "@getpaseo/plugin/client" is not available`.** The app (often the
 phone) is older than the daemon. Update it.

@@ -2,31 +2,31 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PROVIDERS, envFor, isProviderId, providerForHome } from "./providers.ts";
 
-const claude = { provider: "claude" as const, home: "/Users/me/.claude" };
+const DEFAULT_DIR = "/Users/me/.claude";
+const claudeWork = { provider: "claude" as const, home: "/Users/me/.claude-work" };
+const claudeDefault = { provider: "claude" as const, home: "/Users/me/.claude" };
 const codex = { provider: "codex" as const, home: "/Users/me/.codex-work" };
 
-test("a claude session is given the token and nothing else", () => {
-  assert.deepEqual(envFor(claude, "sk-ant-oat01-example"), {
-    CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat01-example",
+test("a claude session is pointed at the account's credential directory, not its config dir", () => {
+  // Only the credential variable is set, so the session keeps its own config directory
+  // (transcript, settings, MCP) and only the login moves.
+  assert.deepEqual(envFor(claudeWork, DEFAULT_DIR), { CLAUDE_SECURESTORAGE_CONFIG_DIR: "/Users/me/.claude-work" });
+});
+
+test("the default claude directory is reached with an empty value, not its path", () => {
+  // Claude Code's Keychain item for the default dir is unsuffixed; the path would hash to a
+  // different, empty item and read as logged out.
+  assert.deepEqual(envFor(claudeDefault, DEFAULT_DIR), { CLAUDE_SECURESTORAGE_CONFIG_DIR: "" });
+});
+
+test("a trailing slash does not hide the default directory", () => {
+  assert.deepEqual(envFor({ provider: "claude", home: "/Users/me/.claude/" }, DEFAULT_DIR), {
+    CLAUDE_SECURESTORAGE_CONFIG_DIR: "",
   });
 });
 
-test("no config directory is named, so the session keeps the one it already has", () => {
-  const env = envFor(claude, "sk-ant-oat01-example");
-  assert.equal(env.CLAUDE_CONFIG_DIR, undefined);
-});
-
-test("a claude session with no token is given nothing at all", () => {
-  assert.deepEqual(envFor(claude, null), {});
-});
-
-test("a codex session is pointed at its directory and given no token", () => {
-  assert.deepEqual(envFor(codex, null), { CODEX_HOME: "/Users/me/.codex-work" });
-});
-
-test("a codex session ignores a token even when one is offered", () => {
-  // A Claude token handed to a Codex session would look like it worked while doing nothing.
-  assert.deepEqual(envFor(codex, "sk-ant-oat01-example"), { CODEX_HOME: "/Users/me/.codex-work" });
+test("a codex session is pointed at its directory", () => {
+  assert.deepEqual(envFor(codex, DEFAULT_DIR), { CODEX_HOME: "/Users/me/.codex-work" });
 });
 
 test("both providers are ids and both are now supported", () => {

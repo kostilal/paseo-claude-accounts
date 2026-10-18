@@ -12,7 +12,6 @@ import {
   resolveAccount,
   defaultAccount,
   setDefault,
-  tokenKey,
   type Registry,
 } from "./registry.ts";
 
@@ -67,16 +66,12 @@ test("fields that are no longer used are dropped on read", () => {
   assert.deepEqual(parseRegistry(legacy), registry());
 });
 
-test("a minted token's login survives the round trip through the stored schema", () => {
-  const withLogin = { ...registry(), accounts: [{ ...work, tokenLogin: "alice@example.com" }, home] };
-  const loaded = parseRegistry(withLogin);
-  assert.deepEqual(loaded, withLogin);
-  assert.equal(accountById(loaded!, "work")?.tokenLogin, "alice@example.com");
-});
-
-test("a stored account without a token login reads back without the field", () => {
-  const loaded = parseRegistry(registry())!;
+test("0.1.x switching-key fields are dropped on read", () => {
+  const legacy = { ...registry(), accounts: [{ ...work, tokenLogin: "alice@example.com", tokenOrg: "org-team" }, home] };
+  const loaded = parseRegistry(legacy)!;
+  assert.deepEqual(loaded, registry());
   assert.equal(Object.hasOwn(accountById(loaded, "work") ?? {}, "tokenLogin"), false);
+  assert.equal(Object.hasOwn(accountById(loaded, "work") ?? {}, "tokenOrg"), false);
 });
 
 // Deleting accounts and hiding their directories
@@ -185,19 +180,6 @@ test("unhiding a home that is not hidden is a harmless no-op", () => {
   assert.deepEqual(result.registry.hidden, []);
   const { hidden: _hidden, ...old } = registry();
   assert.deepEqual(unhideHomes(old, ["/x"]).restored, []);
-});
-
-test("a token is keyed on its login and organisation, a legacy one on the login alone", () => {
-  assert.equal(tokenKey({ tokenLogin: "alice@example.com", tokenOrg: "org-team" }), "alice@example.com/org-team");
-  assert.equal(tokenKey({ tokenLogin: "alice@example.com", tokenOrg: "org-personal" }), "alice@example.com/org-personal");
-  assert.equal(tokenKey({ tokenLogin: "alice@example.com" }), "alice@example.com");
-  assert.equal(tokenKey({}), null);
-  assert.equal(tokenKey({ tokenLogin: "" }), null);
-});
-
-test("a stored organisation survives a read of the state file", () => {
-  const raw = { version: 2, accounts: [{ ...work, tokenLogin: "alice@example.com", tokenOrg: "org-team" }], agents: {} };
-  assert.equal(parseRegistry(raw)?.accounts[0]?.tokenOrg, "org-team");
 });
 
 test("a default names an account of its own provider, and goes when the account is removed", () => {

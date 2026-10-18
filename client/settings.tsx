@@ -53,11 +53,8 @@ export function AccountsSettings({ theme }: PluginSurfaceProps) {
   const labelOf = (id: string) => options.find((option) => option.id === id)?.label ?? id;
   const defaultChoices = [
     { label: strings.defaultSettingNone, value: NONE },
-    ...options.map((option) => ({
-      label: option.login === "" || option.login === option.label ? option.label : `${option.label} · ${option.login}`,
-      value: option.id,
-    })),
-    // A default that is no longer offered (removed, key gone) still shows as what is set.
+    ...options.map((option) => ({ label: option.label, value: option.id })),
+    // A default that is no longer offered (the account was removed) still shows as what is set.
     ...(chosen !== NONE && !options.some((option) => option.id === chosen)
       ? [{ label: current?.label || chosen, value: chosen }]
       : []),

@@ -8,11 +8,8 @@ export const switchCode = z.enum([
   "unknown-account",
   "unsupported-provider",
   "missing-directory",
-  /** The target has no minted token, so the hook would inject nothing and the chat would
-   *  reopen on its old account. Refused before anything is written. */
-  "no-token",
-  /** The target directory exists but nobody is logged into it. Separate from `no-token`
-   *  because the remedy differs (`codex login` rather than minting a token). */
+  /** The target directory exists but nobody is logged into it, so the hook would run the
+   *  session on an empty login. Refused before anything is written; the remedy is to log in. */
   "not-logged-in",
   "paseo-not-found",
   "reload-failed",
@@ -64,11 +61,8 @@ export const pillAccount = z.object({
   label: z.string(),
   /** The provider of the directory a press lands in. */
   provider: z.string().default("claude"),
-  /** That directory, used by `accounts.mint-token`. */
+  /** That directory. */
   home: z.string().default(""),
-  /** Whether a press can work: a minted token for a token switch, a login for a directory
-   *  switch. Otherwise the row offers to mint a token. */
-  hasToken: z.boolean().default(false),
   /** The login key from shared/identity.ts; the row's identity. */
   key: z.string(),
   /** The parts a row is titled by, joined with `loginLabel`. */

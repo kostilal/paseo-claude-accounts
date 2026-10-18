@@ -2,8 +2,7 @@ export interface Identity {
   loggedIn: boolean;
   email: string;
   orgName: string;
-  /** Only `claude auth status` reports it; compared with the organisation a minted token
-   *  bills. */
+  /** Only `claude auth status` reports it; the organisation the directory is signed in to. */
   orgId?: string;
   subscriptionType: string;
 }
