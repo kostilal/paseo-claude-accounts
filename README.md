@@ -12,6 +12,10 @@ composer: the session restarts on that account and the conversation carries on.
 - **All chats at once.** "Move all chats here" on an account, pressed twice, moves every chat in
   every workspace onto it and makes it the default: chats opened later start on it too. Idle chats restart on it now, closed ones when they next open; a chat in the middle of
   a turn is left alone rather than cut off.
+- **Default for new chats.** Settings → Plugins → Claude Accounts picks the account every new chat
+  starts on; existing chats keep theirs. A new chat is not started when that account cannot be
+  used (removed, no switching key, key expired or revoked), or when no default is set and the
+  chat's own folder has no login: Paseo shows what to choose instead of an auth error.
 
 <p>
   <img src="assets/pill.png" alt="The account pill and its popover above a chat composer" width="400">

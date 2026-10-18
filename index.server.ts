@@ -14,19 +14,22 @@ import {
   removeAccount,
   unhideAccount,
 } from "./shared/accounts.ts";
+import { type RefusalCode, getDefaultRpc, refusalText, setDefaultRpc } from "./shared/defaults.ts";
+import { detectLocale, t } from "./shared/i18n.ts";
 import { uniqueId } from "./shared/naming.ts";
 import { parseAuthStatus } from "./shared/parse.ts";
 import { canonical } from "./shared/path.ts";
 import { PROVIDERS, type ProviderId, isProviderId, providerForHome } from "./shared/providers.ts";
-import { type Registry, accountById, registerAccount, removeAccounts, unhideHomes } from "./shared/registry.ts";
+import { type Registry, accountById, registerAccount, removeAccounts, setDefault, unhideHomes } from "./shared/registry.ts";
 import { preferences } from "./shared/settings.ts";
 import { pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
 import { createApiKeyCheck } from "./server/apiKey.ts";
 import { claudeEnv, findClaude } from "./server/claude.ts";
+import { cachedTokenCheck, checkDefault, defaultOptions } from "./server/defaults.ts";
 import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } from "./server/discover.ts";
 import { directoryExists, sessionEnv } from "./server/hook.ts";
 import { openLogin } from "./server/login.ts";
-import { finishMint, validateToken } from "./server/mint.ts";
+import { finishMint, tokenStatus, validateToken } from "./server/mint.ts";
 import { createMints } from "./server/mintTerminal.ts";
 import { readMintedToken, writeMintedToken } from "./server/mintedToken.ts";
 import { createOverview, createUsageRow } from "./server/overview.ts";
@@ -42,7 +45,7 @@ import { createUsage } from "./server/usage.ts";
 const run = promisify(execFile);
 
 export default function contribute(server: PluginServerContext) {
-  server.registerSettings(preferences);
+  const settings = server.registerSettings(preferences);
   const projects = createProjects();
   const usage = createUsage();
   const discovery = createDiscovery();
@@ -67,6 +70,14 @@ export default function contribute(server: PluginServerContext) {
   }
 
   const persist = (registry: Registry) => writeRegistry(registry, STATE_FILE, log);
+  const checkToken = cachedTokenCheck((token) => tokenStatus(token));
+
+  /** The language the daemon writes messages in: the plugin's setting, else the daemon's. */
+  async function serverStrings() {
+    const state = await settings.read().catch(() => null);
+    const language = state !== null && state.status === "ready" ? state.values.language : "auto";
+    return t(language === "auto" ? detectLocale() : language);
+  }
 
   const overviewFor = createOverview({
     discover: (paths, refresh) => discovery.discover(paths, refresh),
@@ -278,12 +289,56 @@ export default function contribute(server: PluginServerContext) {
     return { ...state, overridingVar: override };
   });
 
+  server.handle(getDefaultRpc, async (input) => {
+    const registry = await readRegistry();
+    const options = defaultOptions(registry, input.provider);
+    const checked = await checkDefault(registry, input.provider, {
+      readMintedToken: (login) => readMintedToken(login),
+      directoryExists,
+      checkToken,
+    });
+    if (checked.state === "unset") return { account: "", problem: "" as const, label: "", options };
+    if (checked.state === "ok") return { account: checked.account.id, problem: "" as const, label: checked.account.label, options };
+    return { account: checked.id, problem: checked.problem, label: checked.label, options };
+  });
+
+  // Only decides where chats opened from now on land; no binding is touched.
+  server.handle(setDefaultRpc, async (input) => {
+    if (!isProviderId(input.provider) || !PROVIDERS[input.provider].supported) return { code: "unsupported-provider" as const };
+    const read = await loadRegistry();
+    if (read.state === "unreadable") return { code: "registry-unreadable" as const };
+    if (input.account === "") {
+      await persist(setDefault(read.registry, input.provider, null));
+      return { code: "" as const };
+    }
+    // Refuse a default the hook could not use, before anything is written.
+    const checked = await checkDefault(setDefault(read.registry, input.provider, input.account), input.provider, {
+      readMintedToken: (login) => readMintedToken(login),
+      directoryExists,
+      checkToken,
+    });
+    if (checked.state === "broken") return { code: checked.problem };
+    await persist(setDefault(read.registry, input.provider, input.account));
+    return { code: "" as const };
+  });
+
   server.before("agent.session_open", async (input) => {
+    const strings = await serverStrings();
     const env = await sessionEnv(input.request, {
       readRegistry,
       writeRegistry: persist,
       readMintedToken: (login) => readMintedToken(login),
       directoryExists,
+      checkToken,
+      // Where a new chat would run without the plugin: an explicit directory, else the
+      // project's, else the daemon's. Asked again past the cache before refusing, in case
+      // the person has just logged in.
+      ownLogin: async (request) => {
+        const dir = canonical(request.env.CLAUDE_CONFIG_DIR || (await jobDirFor(request.cwd)) || unboundDir());
+        if ((await discovery.identify(dir)).loggedIn) return { dir, loggedIn: true };
+        return { dir, loggedIn: (await discovery.identify(dir, true)).loggedIn };
+      },
+      refusalText: (code: RefusalCode, values) => refusalText(strings, code, values),
       log,
     });
     return env === undefined ? undefined : { ...input.request, env };

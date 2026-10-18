@@ -150,3 +150,27 @@ export async function validateToken(token: string, fetcher: typeof fetch = fetch
     return null;
   }
 }
+
+/** Whether Anthropic still accepts a switching key: `rejected` only for a 401, which is what
+ *  an expired or revoked token gets. Anything else that is not a yes (a timeout, no network,
+ *  a 5xx) is `unknown`, and callers must not treat it as a broken key. */
+export async function tokenStatus(
+  token: string,
+  fetcher: typeof fetch = fetch,
+  timeoutMs = 5_000,
+): Promise<"ok" | "rejected" | "unknown"> {
+  try {
+    const response = await fetcher(MODELS_ENDPOINT, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "anthropic-beta": "oauth-2025-04-20",
+        "anthropic-version": "2023-06-01",
+      },
+      signal: timeoutSignal(timeoutMs),
+    });
+    if (response.status === 200 || response.status === 403) return "ok";
+    return response.status === 401 ? "rejected" : "unknown";
+  } catch {
+    return "unknown";
+  }
+}

@@ -70,6 +70,19 @@ export interface Strings {
   showPill: string;
   showPillHint: string;
   settingsHint: string;
+  /** Settings → the account new chats open on. */
+  defaultSetting: string;
+  defaultSettingNone: string;
+  defaultSettingHint: string;
+  defaultSettingEmpty: string;
+  defaultSettingFailed: string;
+  /** Why a new chat was not started; also the settings banner for a broken default. */
+  refuseDefaultGone: string;
+  refuseDefaultNoToken: string;
+  refuseDefaultRejected: string;
+  refuseDefaultMissingDir: string;
+  refuseNotSet: string;
+  refuseNoAccounts: string;
   pillUnread: string;
   /** Delete only forgets: every confirm says the folder and login stay. */
   deleteAccount: string;
@@ -165,6 +178,17 @@ const en: Strings = {
   showPill: "Pill above chats",
   showPillHint: "The account ring and figure in the composer of every Claude chat. Switching happens there.",
   settingsHint: "Changes apply immediately.",
+  defaultSetting: "Default account for new chats",
+  defaultSettingNone: "Not set: a chat uses its folder's login",
+  defaultSettingHint: "A new chat opens on this account. Existing chats keep theirs; to move them, use \"Move all chats here\" on the Accounts screen. Only accounts with a switching key are listed.",
+  defaultSettingEmpty: "No account has a switching key yet. Enable switching for one on the Accounts screen to choose it here.",
+  defaultSettingFailed: "Could not save the default account.",
+  refuseDefaultGone: "The default account for new chats is no longer in the list. Choose another in Settings → Plugins → Claude Accounts.",
+  refuseDefaultNoToken: "The default account \"{label}\" has no switching key. Enable switching for it on the Accounts screen, or choose another default in Settings → Plugins → Claude Accounts.",
+  refuseDefaultRejected: "The switching key of the default account \"{label}\" was rejected: it expired or was revoked. Renew it on the Accounts screen, or choose another default in Settings → Plugins → Claude Accounts.",
+  refuseDefaultMissingDir: "The folder of the default account \"{label}\" is gone. Choose another default in Settings → Plugins → Claude Accounts.",
+  refuseNotSet: "This chat has no Claude account: nobody is logged in to {dir} and no default account is set. Choose one in Settings → Plugins → Claude Accounts, or log in on the Accounts screen.",
+  refuseNoAccounts: "This chat has no Claude account: nobody is logged in to {dir} and no account has a switching key. Add an account on the Accounts screen and enable switching for it, then choose it in Settings → Plugins → Claude Accounts.",
   pillUnread: "…",
   deleteAccount: "Delete",
   deleteConfirm: "Remove this account from the list? Its folder and login stay where they are.",
@@ -253,6 +277,17 @@ const ru: Strings = {
   showPill: "Пилюля над чатами",
   showPillHint: "Кольцо и цифра аккаунта в композере каждого чата Claude. Переключение делается там.",
   settingsHint: "Изменения применяются сразу.",
+  defaultSetting: "Аккаунт по умолчанию для новых чатов",
+  defaultSettingNone: "Не задан: чат берёт вход своей папки",
+  defaultSettingHint: "Новый чат открывается на этом аккаунте. Существующие чаты остаются на своих; перенести их можно кнопкой «Перевести все чаты сюда» на экране аккаунтов. В списке только аккаунты с ключом переключения.",
+  defaultSettingEmpty: "Ни у одного аккаунта ещё нет ключа переключения. Разреши переключение на экране аккаунтов, чтобы выбрать его здесь.",
+  defaultSettingFailed: "Не удалось сохранить аккаунт по умолчанию.",
+  refuseDefaultGone: "Аккаунта по умолчанию для новых чатов больше нет в списке. Выбери другой в разделе Настройки → Плагины → Claude Accounts.",
+  refuseDefaultNoToken: "У аккаунта по умолчанию «{label}» нет ключа переключения. Разреши для него переключение на экране аккаунтов или выбери другой в разделе Настройки → Плагины → Claude Accounts.",
+  refuseDefaultRejected: "Ключ переключения аккаунта по умолчанию «{label}» отклонён: истёк или отозван. Обнови его на экране аккаунтов или выбери другой в разделе Настройки → Плагины → Claude Accounts.",
+  refuseDefaultMissingDir: "Папки аккаунта по умолчанию «{label}» больше нет. Выбери другой в разделе Настройки → Плагины → Claude Accounts.",
+  refuseNotSet: "У этого чата нет аккаунта Claude: в {dir} никто не вошёл, а аккаунт по умолчанию не задан. Выбери его в разделе Настройки → Плагины → Claude Accounts или войди на экране аккаунтов.",
+  refuseNoAccounts: "У этого чата нет аккаунта Claude: в {dir} никто не вошёл, и ни у одного аккаунта нет ключа переключения. Добавь аккаунт на экране аккаунтов, разреши переключение и выбери его в разделе Настройки → Плагины → Claude Accounts.",
   pillUnread: "…",
   deleteAccount: "Удалить",
   deleteConfirm: "Убрать аккаунт из списка? Папка и вход останутся.",
@@ -341,6 +376,17 @@ const uk: Strings = {
   showPill: "Пілюля над чатами",
   showPillHint: "Кільце й цифра акаунта в композері кожного чату Claude. Перемикання робиться там.",
   settingsHint: "Зміни застосовуються одразу.",
+  defaultSetting: "Акаунт за замовчуванням для нових чатів",
+  defaultSettingNone: "Не задано: чат бере вхід своєї теки",
+  defaultSettingHint: "Новий чат відкривається на цьому акаунті. Наявні чати лишаються на своїх; перенести їх можна кнопкою «Перевести всі чати сюди» на екрані акаунтів. У списку лише акаунти з ключем перемикання.",
+  defaultSettingEmpty: "Жоден акаунт ще не має ключа перемикання. Дозволь перемикання на екрані акаунтів, щоб обрати його тут.",
+  defaultSettingFailed: "Не вдалося зберегти акаунт за замовчуванням.",
+  refuseDefaultGone: "Акаунта за замовчуванням для нових чатів більше немає у списку. Обери інший у розділі Налаштування → Плагіни → Claude Accounts.",
+  refuseDefaultNoToken: "Акаунт за замовчуванням «{label}» не має ключа перемикання. Дозволь для нього перемикання на екрані акаунтів або обери інший у розділі Налаштування → Плагіни → Claude Accounts.",
+  refuseDefaultRejected: "Ключ перемикання акаунта за замовчуванням «{label}» відхилено: він сплив або відкликаний. Онови його на екрані акаунтів або обери інший у розділі Налаштування → Плагіни → Claude Accounts.",
+  refuseDefaultMissingDir: "Теки акаунта за замовчуванням «{label}» більше немає. Обери інший у розділі Налаштування → Плагіни → Claude Accounts.",
+  refuseNotSet: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, а акаунт за замовчуванням не задано. Обери його в розділі Налаштування → Плагіни → Claude Accounts або увійди на екрані акаунтів.",
+  refuseNoAccounts: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, і жоден акаунт не має ключа перемикання. Додай акаунт на екрані акаунтів, дозволь перемикання й обери його в розділі Налаштування → Плагіни → Claude Accounts.",
   pillUnread: "…",
   deleteAccount: "Видалити",
   deleteConfirm: "Прибрати акаунт зі списку? Тека й вхід залишаться.",

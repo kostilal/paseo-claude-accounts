@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Identity } from "../shared/parse.ts";
 import type { Registry } from "../shared/registry.ts";
-import { type FinishDeps, finishMint, tokenCandidates, validateToken } from "./mint.ts";
+import { type FinishDeps, finishMint, tokenCandidates, tokenStatus, validateToken } from "./mint.ts";
 
 /** A token-shaped string of a realistic length (over the 100-character floor). */
 const TOKEN = `sk-ant-oat01-${"A1b2_C3d4-".repeat(10)}xyz`;
@@ -314,4 +314,18 @@ test("the token is sent as a bearer token with the OAuth beta header", async () 
   const headers = seen[0]!.headers as Record<string, string>;
   assert.equal(headers.Authorization, `Bearer ${TOKEN}`);
   assert.equal(headers["anthropic-beta"], "oauth-2025-04-20");
+});
+
+// tokenStatus
+
+test("only a 401 calls a switching key rejected", async () => {
+  assert.equal(await tokenStatus(TOKEN, fetcher(200)), "ok");
+  assert.equal(await tokenStatus(TOKEN, fetcher(403)), "ok", "a key without access to the endpoint is still a key");
+  assert.equal(await tokenStatus(TOKEN, fetcher(401)), "rejected");
+});
+
+test("an outage or an odd answer is unknown, not rejected", async () => {
+  assert.equal(await tokenStatus(TOKEN, fetcher(500)), "unknown");
+  assert.equal(await tokenStatus(TOKEN, fetcher(429)), "unknown");
+  assert.equal(await tokenStatus(TOKEN, fetcher(new Error("offline"))), "unknown");
 });

@@ -11,6 +11,7 @@ import {
   unhideHomes,
   resolveAccount,
   defaultAccount,
+  setDefault,
   tokenKey,
   type Registry,
 } from "./registry.ts";
@@ -208,4 +209,13 @@ test("a default names an account of its own provider, and goes when the account 
   assert.ok(removed.ok);
   assert.deepEqual(removed.registry.defaults, {});
   assert.equal(parseRegistry({ ...withDefault })?.defaults?.claude, "work");
+});
+
+test("setting a default leaves every binding alone, and clearing it removes only that provider", () => {
+  const base = { ...registry(), agents: { a1: "work" }, defaults: { codex: "cdx" } };
+  const set = setDefault(base, "claude", "work");
+  assert.deepEqual(set.defaults, { codex: "cdx", claude: "work" });
+  assert.deepEqual(set.agents, { a1: "work" });
+  assert.deepEqual(setDefault(set, "claude", null).defaults, { codex: "cdx" });
+  assert.deepEqual(base.defaults, { codex: "cdx" }, "the input is not mutated");
 });

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { PaseoApi } from "./paseo.ts";
 import type { Registry } from "../shared/registry.ts";
-import { type SessionRequest, sessionEnv } from "./hook.ts";
+import { SessionRefused, type SessionRequest, sessionEnv } from "./hook.ts";
 
 const paseo = {} as PaseoApi;
 
@@ -79,51 +79,167 @@ test("a token minted before organisations were recorded is still read under the 
   assert.deepEqual(asked, ["alice@example.com"]);
 });
 
-// The default account: "Move all chats here" sets it, new chats open on it.
+// The default account: set in the settings or by "Move all chats here"; new chats open on it.
 
-const keyed = { ...work, id: "keyed", home: "/Users/me/.claude", tokenLogin: "alice@example.com", tokenOrg: "org-team" };
+const keyed = { ...work, id: "keyed", label: "Team", home: "/Users/me/.claude", tokenLogin: "alice@example.com", tokenOrg: "org-team" };
 
-function defaulted(options: { agents?: Record<string, string>; token?: string | null; defaults?: Record<string, string> } = {}) {
+function defaulted(
+  options: {
+    agents?: Record<string, string>;
+    token?: string | null;
+    defaults?: Record<string, string>;
+    accounts?: Registry["accounts"];
+    check?: "ok" | "rejected" | "unknown";
+    own?: { dir: string; loggedIn: boolean | null };
+  } = {},
+) {
   let stored: Registry = registry({
-    accounts: [work, keyed],
+    accounts: options.accounts ?? [work, keyed],
     agents: options.agents ?? {},
     defaults: options.defaults ?? { claude: "keyed" },
   });
-  const deps = {
+  const lines: string[] = [];
+  const deps: Parameters<typeof sessionEnv>[1] = {
     readRegistry: async () => stored,
     writeRegistry: async (next: Registry) => {
       stored = next;
     },
     readMintedToken: async () => (options.token === undefined ? "sk-ant-oat01-team" : options.token),
     directoryExists: async () => true,
+    checkToken: async () => options.check ?? "ok",
+    ownLogin: async () => options.own ?? { dir: "/w/acme/.claude-data", loggedIn: true },
+    refusalText: (code, values) => `${code}|${values.label ?? ""}|${values.dir ?? ""}`,
+    log: (line) => lines.push(line),
   };
-  return { deps, stored: () => stored };
+  return { deps, stored: () => stored, lines };
 }
 
-test("a chat with no binding opens on the default account and is bound to it", async () => {
+const created = (overrides: Partial<SessionRequest> = {}) => request({ agentId: "new", reason: "create", ...overrides });
+
+async function refusal(promise: Promise<unknown>): Promise<SessionRefused> {
+  try {
+    await promise;
+  } catch (error) {
+    assert.ok(error instanceof SessionRefused, `expected a refusal, got ${String(error)}`);
+    return error;
+  }
+  assert.fail("the session was not refused");
+}
+
+test("a new chat with no binding opens on the default account and is bound to it", async () => {
   const fake = defaulted();
-  const env = await sessionEnv(request({ agentId: "new" }), fake.deps);
+  const env = await sessionEnv(created(), fake.deps);
   assert.equal(env?.CLAUDE_CODE_OAUTH_TOKEN, "sk-ant-oat01-team");
+  assert.equal(env?.PATH, "/usr/bin", "Paseo's own environment is kept");
   assert.equal(fake.stored().agents.new, "keyed");
+});
+
+test("the default wins over a logged-in project directory for a new chat", async () => {
+  const fake = defaulted({ own: { dir: "/w/acme/.claude-data", loggedIn: true } });
+  assert.equal((await sessionEnv(created(), fake.deps))?.CLAUDE_CODE_OAUTH_TOKEN, "sk-ant-oat01-team");
+});
+
+test("an existing chat with no binding is not moved onto a default chosen later", async () => {
+  for (const reason of ["resume", "refresh", "import"] as const) {
+    const fake = defaulted();
+    assert.equal(await sessionEnv(request({ agentId: "old", reason }), fake.deps), undefined, reason);
+    assert.equal("old" in fake.stored().agents, false, reason);
+  }
+});
+
+test("an existing chat whose default is broken still opens: only new chats are refused", async () => {
+  const fake = defaulted({ token: null });
+  assert.equal(await sessionEnv(request({ agentId: "old", reason: "resume" }), fake.deps), undefined);
 });
 
 test("a chat bound by hand keeps its account over the default", async () => {
   const fake = defaulted({ agents: { mine: "work" } });
-  const env = await sessionEnv(request({ agentId: "mine" }), fake.deps);
+  const env = await sessionEnv(request({ agentId: "mine", reason: "create" }), fake.deps);
   assert.equal(env, undefined, "work has no token, so the session is left alone rather than moved");
   assert.equal(fake.stored().agents.mine, "work");
 });
 
-test("a default whose token cannot be read binds nothing", async () => {
+test("with several accounts each new chat lands on the one chosen as default", async () => {
+  const other = { ...keyed, id: "other", label: "Other", tokenLogin: "bob@example.com", tokenOrg: "org-b" };
+  const tokens: Record<string, string> = {
+    "alice@example.com/org-team": "sk-ant-oat01-team",
+    "bob@example.com/org-b": "sk-ant-oat01-bob",
+  };
+  for (const [chosen, token] of [["keyed", "sk-ant-oat01-team"], ["other", "sk-ant-oat01-bob"]] as const) {
+    const fake = defaulted({ accounts: [work, keyed, other], defaults: { claude: chosen } });
+    const env = await sessionEnv(created(), { ...fake.deps, readMintedToken: async (key) => tokens[key] ?? null });
+    assert.equal(env?.CLAUDE_CODE_OAUTH_TOKEN, token);
+    assert.equal(fake.stored().agents.new, chosen);
+  }
+});
+
+test("a default whose switching key is gone refuses the new chat and binds nothing", async () => {
   const fake = defaulted({ token: null });
-  assert.equal(await sessionEnv(request({ agentId: "new" }), fake.deps), undefined);
+  const refused = await refusal(sessionEnv(created(), fake.deps));
+  assert.equal(refused.code, "no-token");
+  assert.equal(refused.message, "no-token|Team|");
   assert.equal("new" in fake.stored().agents, false);
+});
+
+test("a default whose key Anthropic rejects (expired or revoked) refuses the new chat", async () => {
+  const fake = defaulted({ check: "rejected" });
+  assert.equal((await refusal(sessionEnv(created(), fake.deps))).code, "token-rejected");
+  assert.equal("new" in fake.stored().agents, false);
+});
+
+test("a key the network could not confirm still opens the chat on the default", async () => {
+  const fake = defaulted({ check: "unknown" });
+  assert.equal((await sessionEnv(created(), fake.deps))?.CLAUDE_CODE_OAUTH_TOKEN, "sk-ant-oat01-team");
+});
+
+test("a default naming a removed account refuses the new chat", async () => {
+  const fake = defaulted({ defaults: { claude: "gone" } });
+  assert.equal((await refusal(sessionEnv(created(), fake.deps))).code, "unknown-account");
 });
 
 test("a default for another provider is not applied", async () => {
   const fake = defaulted({ defaults: { codex: "keyed" } });
-  assert.equal(await sessionEnv(request({ agentId: "new" }), fake.deps), undefined);
+  assert.equal(await sessionEnv(created(), fake.deps), undefined);
   assert.equal("new" in fake.stored().agents, false);
+});
+
+test("no default and a logged-in directory: the new chat opens on its own login", async () => {
+  const fake = defaulted({ defaults: {} });
+  assert.equal(await sessionEnv(created(), fake.deps), undefined);
+  assert.equal("new" in fake.stored().agents, false);
+});
+
+test("no default and a logged-out directory: the new chat is refused and asked to choose", async () => {
+  const fake = defaulted({ defaults: {}, own: { dir: "/w/evo/.claude-data", loggedIn: false } });
+  const refused = await refusal(sessionEnv(created(), fake.deps));
+  assert.equal(refused.code, "not-set");
+  assert.equal(refused.message, "not-set||/w/evo/.claude-data");
+  assert.match(fake.lines.join("\n"), /refused to start new \(not-set\)/);
+});
+
+test("no accounts with a key and a logged-out directory: the refusal says to add one", async () => {
+  const fake = defaulted({ defaults: {}, accounts: [], own: { dir: "/w/evo/.claude-data", loggedIn: false } });
+  assert.equal((await refusal(sessionEnv(created(), fake.deps))).code, "no-accounts");
+});
+
+test("a login state that could not be read does not refuse the chat", async () => {
+  const fake = defaulted({ defaults: {}, own: { dir: "/w/evo/.claude-data", loggedIn: null } });
+  assert.equal(await sessionEnv(created(), fake.deps), undefined);
+  const failing = defaulted({ defaults: {} });
+  const env = await sessionEnv(created(), {
+    ...failing.deps,
+    ownLogin: async () => {
+      throw new Error("the claude command could not be found");
+    },
+  });
+  assert.equal(env, undefined);
+});
+
+test("a refusal never carries the token", async () => {
+  const fake = defaulted({ token: "sk-ant-oat01-secret", check: "rejected" });
+  const refused = await refusal(sessionEnv(created(), fake.deps));
+  assert.equal(refused.message.includes("sk-ant-oat01-secret"), false);
+  assert.equal(fake.lines.join("\n").includes("sk-ant-oat01-secret"), false);
 });
 
 test("an account with no token login recorded leaves the session alone", async () => {

@@ -98,6 +98,15 @@ export function defaultAccount(registry: Registry, provider: string): Account | 
   return account?.provider === provider ? account : null;
 }
 
+/** The provider's default set to an account id, or cleared with `account: null`. Bindings
+ *  are untouched: a default only decides where chats opened from now on land. */
+export function setDefault(registry: Registry, provider: string, account: string | null): Registry {
+  const defaults = { ...registry.defaults };
+  if (account === null) delete defaults[provider];
+  else defaults[provider] = account;
+  return { ...registry, defaults };
+}
+
 /** One agent binding set, or cleared with `account: null`. */
 export function applyBinding(registry: Registry, request: { agentId: string; account: string | null }): Registry {
   const agents = { ...registry.agents };
