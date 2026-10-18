@@ -113,6 +113,14 @@ In Paseo's settings, under **Accounts**:
 - **Language**: English, Русский, Українська, or the same as Paseo
 - **Pill above chats**: turn the composer pill off everywhere
 
+## From ChatGPT
+
+With [Paseo God Mode](https://github.com/devXpro/paseo-god-mode-plugin) 0.10 or newer, ChatGPT can
+read the accounts and their usage, have usage measured now, and move one chat or every chat to an
+account. The plugin describes this itself through `meta.describe` (`paseo.capabilities/1`). Both
+moves are read back to you before they run, naming the chat from Paseo's own data, and a refused
+switch is reported as not done. Adding, deleting, logging in and switching keys are not offered.
+
 ## Limitations
 
 - **macOS only.**

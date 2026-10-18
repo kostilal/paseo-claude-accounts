@@ -1,6 +1,6 @@
 {
   "name": "paseo-claude-accounts",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test"

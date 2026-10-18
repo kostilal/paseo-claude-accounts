@@ -24,6 +24,7 @@ import { type Registry, accountById, registerAccount, removeAccounts, setDefault
 import { preferences } from "./shared/settings.ts";
 import { pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
 import { createApiKeyCheck } from "./server/apiKey.ts";
+import { chatRpc, describeAccounts, describeRpc, readChat } from "./server/capabilities.ts";
 import { claudeEnv, findClaude } from "./server/claude.ts";
 import { cachedTokenCheck, checkDefault, defaultOptions } from "./server/defaults.ts";
 import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } from "./server/discover.ts";
@@ -321,6 +322,11 @@ export default function contribute(server: PluginServerContext) {
     await persist(setDefault(read.registry, input.provider, input.account));
     return { code: "" as const };
   });
+
+  // For God Mode: what an assistant outside Paseo may read and do here, and the chat a switch
+  // would restart, so its confirmation names the chat rather than an id.
+  server.handle(describeRpc, () => describeAccounts());
+  server.handle(chatRpc, (input, { paseo }) => readChat(input.agentId, (id) => paseo.agents.ref(id).refresh()));
 
   server.before("agent.session_open", async (input) => {
     const strings = await serverStrings();
