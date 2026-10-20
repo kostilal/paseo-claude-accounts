@@ -122,6 +122,8 @@ export interface Strings {
   perWorkspaceHint: string;
   /** The Accounts screen's badge, under Auto, on the account Auto would pick now. */
   autoNowBadge: string;
+  /** The Accounts screen's new-chats card. */
+  newChatsHint: string;
   /** `{label}` is the id `PASEO_CLAUDE_ACCOUNT` names, or the account's label. */
   refuseAskedUnknown: string;
   refuseAskedMissingDir: string;
@@ -139,7 +141,7 @@ export interface Strings {
 const en: Strings = {
   sidebarTitle: "Accounts",
   accounts: "Accounts",
-  screenSubtitle: "Your logins. Pick one from the pill above any chat to switch that chat onto it.",
+  screenSubtitle: "Your logins. The pill above a chat switches that chat; the account for new chats is set below or with the account button in a workspace header.",
   notLoggedIn: "Not logged in",
   logIn: "Log in",
   noWorkspace: "Open a workspace first: a terminal needs one to live in",
@@ -248,12 +250,13 @@ const en: Strings = {
   perWorkspaceLabel: "One account per task",
   perWorkspaceHint: "Auto's first pick in a workspace holds for all its new chats, until the default changes. Off: each new chat is picked on its own.",
   autoNowBadge: "Auto · now",
+  newChatsHint: "Auto picks one by its allowance as each chat opens. The same choice as the account button in a workspace header.",
 };
 
 const ru: Strings = {
   sidebarTitle: "Аккаунты",
   accounts: "Аккаунты",
-  screenSubtitle: "Твои логины. В пилюле над любым чатом выбираешь один — и чат идёт на нём.",
+  screenSubtitle: "Твои входы. Пилка над чатом переключает этот чат; аккаунт для новых чатов задаётся ниже или кнопкой аккаунтов в шапке воркспейса.",
   notLoggedIn: "Не выполнен вход",
   logIn: "Войти",
   noWorkspace: "Сначала открой воркспейс: терминалу нужно в чём-то жить",
@@ -362,12 +365,13 @@ const ru: Strings = {
   perWorkspaceLabel: "Один аккаунт на задачу",
   perWorkspaceHint: "Первый выбор Авто в воркспейсе действует на все его новые чаты, пока не сменится аккаунт по умолчанию. Выключено: каждый новый чат выбирается отдельно.",
   autoNowBadge: "Авто · сейчас",
+  newChatsHint: "Авто выбирает аккаунт по лимитам при открытии каждого чата. Тот же выбор, что и кнопка аккаунтов в шапке воркспейса.",
 };
 
 const uk: Strings = {
   sidebarTitle: "Акаунти",
   accounts: "Акаунти",
-  screenSubtitle: "Твої логіни. У пілюлі над будь-яким чатом обираєш один — і чат іде на ньому.",
+  screenSubtitle: "Твої входи. Пілка над чатом перемикає цей чат; акаунт для нових чатів задається нижче або кнопкою акаунтів у шапці воркспейсу.",
   notLoggedIn: "Вхід не виконано",
   logIn: "Увійти",
   noWorkspace: "Спочатку відкрий воркспейс: терміналу потрібно десь жити",
@@ -476,6 +480,7 @@ const uk: Strings = {
   perWorkspaceLabel: "Один акаунт на задачу",
   perWorkspaceHint: "Перший вибір Авто у воркспейсі діє на всі його нові чати, доки не зміниться акаунт за замовчуванням. Вимкнено: кожен новий чат обирається окремо.",
   autoNowBadge: "Авто · зараз",
+  newChatsHint: "Авто обирає акаунт за лімітами під час відкриття кожного чату. Той самий вибір, що й кнопка акаунтів у шапці воркспейсу.",
 };
 
 /** Maps a locale tag to a catalogue entry: `ru-RU`, `ru` and `ru_RU.UTF-8` all give `ru`. */
