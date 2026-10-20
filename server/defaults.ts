@@ -1,6 +1,6 @@
 import type { DefaultOption, DefaultProblem } from "../shared/defaults.ts";
 import { type ProviderId, isProviderId } from "../shared/providers.ts";
-import { type Account, type Registry, accountById } from "../shared/registry.ts";
+import { AUTO, type Account, type Registry, accountById } from "../shared/registry.ts";
 
 export interface DefaultDeps {
   directoryExists(path: string): Promise<boolean>;
@@ -8,6 +8,8 @@ export interface DefaultDeps {
 
 export type DefaultCheck =
   | { state: "unset" }
+  /** Pick by allowance as each chat opens; see shared/auto.ts. */
+  | { state: "auto" }
   | { state: "ok"; account: Account }
   | { state: "broken"; problem: Exclude<DefaultProblem, "">; id: string; label: string };
 
@@ -19,6 +21,7 @@ export type DefaultCheck =
 export async function checkDefault(registry: Registry, provider: string, deps: DefaultDeps): Promise<DefaultCheck> {
   const id = registry.defaults?.[provider];
   if (id === undefined || id === "") return { state: "unset" };
+  if (id === AUTO) return { state: "auto" };
   const account = accountById(registry, id);
   if (account === null || account.provider !== provider) return { state: "broken", problem: "unknown-account", id, label: id };
   if (!(await deps.directoryExists(account.home))) {

@@ -16,6 +16,8 @@ import {
 } from "../shared/accounts.ts";
 import { loginLabel } from "../shared/identity.ts";
 import { switchAllRpc } from "../shared/switch.ts";
+import { getDefaultRpc, setDefaultRpc } from "../shared/defaults.ts";
+import { AUTO } from "../shared/registry.ts";
 import type { Strings } from "../shared/i18n.ts";
 import { useStrings } from "./locale.ts";
 import { PROVIDERS, type ProviderId, providerForHome } from "../shared/providers.ts";
@@ -148,6 +150,64 @@ function moveAllSummary(
   return parts.join(" · ");
 }
 
+/**
+ * The account every new Claude chat opens on, the same choice as the workspace header's button:
+ * Auto, or one login. Shown above the logins so the screen says what new chats will do.
+ */
+function NewChatsCard({
+  theme,
+  strings,
+  rows,
+  onChanged,
+}: {
+  theme: PluginTheme;
+  strings: Strings;
+  rows: AccountView[];
+  onChanged: () => void;
+}) {
+  const askDefault = useRpc(getDefaultRpc);
+  const saveDefault = useRpc(setDefaultRpc);
+  const queryClient = useQueryClient();
+  const key = ["accounts", "default-setting"];
+  const { data } = useQuery({ queryKey: key, queryFn: () => askDefault({ provider: "claude" }), refetchInterval: 30_000 });
+  const choose = useMutation({
+    mutationFn: (account: string) => saveDefault({ provider: "claude", account }),
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: key });
+      onChanged();
+    },
+  });
+  const current = data?.account ?? "";
+  const logins = rows.filter((row) => row.provider === "claude" && row.loggedIn && row.switchTo !== "");
+  const failed = choose.isError || (choose.data !== undefined && choose.data.code !== "");
+  return (
+    <Card theme={theme}>
+      <Text style={{ ...typeScale.title, color: theme.colors.foreground }}>{strings.workspaceTitle}</Text>
+      <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }}>{strings.newChatsHint}</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <Chip
+          theme={theme}
+          label={strings.workspaceAutoNone}
+          selected={current === AUTO}
+          disabled={choose.isPending || data === undefined}
+          onPress={() => choose.mutate(AUTO)}
+        />
+        {logins.map((row) => (
+          <Chip
+            key={row.id}
+            theme={theme}
+            label={row.email || row.name}
+            selected={current !== AUTO && row.accountIds.includes(current)}
+            disabled={choose.isPending || data === undefined}
+            onPress={() => choose.mutate(row.switchTo)}
+          />
+        ))}
+      </View>
+      {failed && <Banner theme={theme} tone="bad" text={strings.defaultSettingFailed} />}
+    </Card>
+  );
+}
+
 function LoginCard({
   theme,
   row,
@@ -210,6 +270,7 @@ function LoginCard({
         </View>
         <View style={{ flexShrink: 0, flexDirection: "row", gap: 6 }}>
           {row.isDefault && <Chip theme={theme} label={strings.defaultAccount} />}
+          {row.autoNow && <Chip theme={theme} label={strings.autoNowBadge} />}
         </View>
       </View>
 
@@ -475,6 +536,10 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
           {data.error === "claude-not-found" && <Banner theme={theme} tone="bad" text={strings.claudeNotFound} />}
           {data.overridingVar !== "" && (
             <Banner theme={theme} tone="bad" text={strings.apiKeyOverride.replace("{var}", data.overridingVar)} />
+          )}
+
+          {registered.some((row) => row.provider === "claude") && (
+            <NewChatsCard theme={theme} strings={strings} rows={registered} onChanged={invalidate} />
           )}
 
           {registered.length === 0 ? (

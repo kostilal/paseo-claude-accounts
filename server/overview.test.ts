@@ -44,6 +44,7 @@ function account(id: string, over: Partial<AccountView> = {}): AccountView {
     accountIds: [],
     switchTo: "",
     isDefault: false,
+    autoNow: false,
     usage: "unauthorised",
     fiveHour: null,
     sevenDay: null,

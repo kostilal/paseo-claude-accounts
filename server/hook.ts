@@ -1,8 +1,18 @@
 import { stat } from "node:fs/promises";
 import type { PluginSessionOpenRequest } from "@getpaseo/plugin/server";
+import { askedAccount } from "../shared/attach.ts";
 import type { RefusalCode } from "../shared/defaults.ts";
 import { PROVIDERS, envFor, isProviderId } from "../shared/providers.ts";
-import { type Account, type Registry, applyBinding, resolveAccount } from "../shared/registry.ts";
+import {
+  AUTO,
+  type Account,
+  type Registry,
+  accountById,
+  applyBinding,
+  bindWorkspace,
+  resolveAccount,
+  workspaceAccount,
+} from "../shared/registry.ts";
 import { checkDefault, defaultOptions } from "./defaults.ts";
 
 /** The part of the session-open request the hook reads. A `Pick` of the SDK type, so an
@@ -28,9 +38,45 @@ export interface HookDeps {
    *  directory that is. Absent, or `loggedIn: null` when it could not be told: the chat is
    *  not refused. */
   ownLogin?(request: SessionRequest): Promise<{ dir: string; loggedIn: boolean | null }>;
+  /** The account an automatic pick chooses for a new chat of `provider` now (see
+   *  shared/auto.ts), or null when there is none. Absent: an automatic default is treated as
+   *  no default. */
+  autoPick?(provider: string): Promise<Account | null>;
+  /** Applies `change` to the registry as one step against other writers, and returns what was
+   *  written. Absent: a plain read, then write. */
+  update?(change: (registry: Registry) => Registry): Promise<Registry>;
+  /** Whether a config directory is logged in; null when it could not be told. Absent: assumed
+   *  logged in. A workspace account that is not is passed over. */
+  loggedIn?(home: string): Promise<boolean | null>;
+  /** Whether Auto's first pick in a workspace holds for the workspace's later chats (the
+   *  "one account per task" setting). Absent: yes. */
+  oneAccountPerWorkspace?(): Promise<boolean>;
   /** The message a refused chat shows. */
   refusalText?(code: RefusalCode, values: { label?: string; dir?: string }): string;
   log?(line: string): void;
+}
+
+/** Names the account a new Claude chat opens on, or `AUTO`, for whoever starts chats by script
+ *  (`paseo run --env PASEO_CLAUDE_ACCOUNT=work`). Chats of other providers ignore it. */
+export const ACCOUNT_VAR = "PASEO_CLAUDE_ACCOUNT";
+
+/** The workspace-create request with the account its first chat's "Claude account" attachment
+ *  asks for put into that chat's environment, where `sessionEnv` reads it; undefined to leave the
+ *  request alone. This is how a chat started from the new-workspace screen, which has no
+ *  workspace (and so no header button) yet, chooses its account. An environment that already
+ *  names an account wins. */
+export function withAskedAccount<
+  Request extends {
+    agent?: { env?: Record<string, string>; attachments?: readonly unknown[] };
+    firstAgentContext?: { attachments?: unknown };
+  },
+>(request: Request): Request | undefined {
+  const agent = request.agent;
+  if (agent === undefined || (agent.env?.[ACCOUNT_VAR] ?? "") !== "") return undefined;
+  const context = request.firstAgentContext?.attachments;
+  const asked = askedAccount([...(agent.attachments ?? []), ...(Array.isArray(context) ? context : [])]);
+  if (asked === null) return undefined;
+  return { ...request, agent: { ...agent, env: { ...agent.env, [ACCOUNT_VAR]: asked } } };
 }
 
 /** Thrown to stop a new chat before Claude Code starts without a login. Paseo fails the chat's
@@ -57,7 +103,8 @@ export async function directoryExists(path: string): Promise<boolean> {
  *  on whatever account is bound now.
  *
  *  A chat with no binding is only touched when it is new (`reason: "create"`): it opens on
- *  the provider's default account and is bound to it, so the pill names it. An existing chat
+ *  the account its environment asks for, its workspace's, or the provider's default (an
+ *  automatic pick included), and is bound to it, so the pill names it. An existing chat
  *  that was never bound keeps opening the way it always has; a default chosen later does
  *  not move it.
  *
@@ -90,29 +137,131 @@ export async function sessionEnv(
   }
 }
 
-/** A new, unbound chat: the default account, or a refusal, or Paseo's own environment. */
+/** A new, unbound chat, in this order: the account its environment asks for, the workspace's
+ *  account, the provider's default (an account, or an automatic pick), or Paseo's own
+ *  environment. An account the environment or the default names but cannot be used refuses the
+ *  chat; a workspace account that cannot is passed over. */
 async function newChatEnv(
   registry: Registry,
+  provider: string,
+  workspaceRequest: SessionRequest,
+  deps: HookDeps,
+): Promise<Record<string, string> | undefined> {
+  // With one account per workspace off, the chat is placed as if it had no workspace: nothing
+  // is read from or written to the workspace accounts. Any left from when it was on are
+  // dropped, so turning it on again starts clean.
+  const perWorkspace = (await deps.oneAccountPerWorkspace?.()) ?? true;
+  const request = perWorkspace ? workspaceRequest : { ...workspaceRequest, workspaceId: null };
+  if (!perWorkspace && Object.keys(registry.workspaces ?? {}).length > 0) {
+    const clear = (current: Registry): Registry => ({ ...current, workspaces: {}, autoPins: [] });
+    if (deps.update !== undefined) await deps.update(clear);
+    else await deps.writeRegistry(clear(await deps.readRegistry()));
+  }
+  const refuse = (code: RefusalCode, values: { label?: string; dir?: string }) =>
+    new SessionRefused(code, deps.refusalText?.(code, values) ?? `no account for this chat (${code})`);
+  const log = deps.log ?? ((line: string) => console.error(line));
+
+  const asked = provider === "claude" ? (request.env[ACCOUNT_VAR]?.trim() ?? "") : "";
+  if (asked !== "" && asked !== AUTO) {
+    const account = accountById(registry, asked);
+    if (account === null || account.provider !== provider) throw refuse("asked-unknown", { label: asked });
+    const env = await accountEnv(account, provider, request, deps);
+    if (env === undefined) throw refuse("asked-missing-directory", { label: account.label });
+    await bindNewChat(account, provider, request, deps, "explicit");
+    return env;
+  }
+
+  // `AUTO` asks for no account in particular, so a workspace that has one keeps it.
+  // A workspace account that cannot open the chat; an automatic pick replaces it.
+  let stale: string | null = null;
+  if (request.workspaceId !== null) {
+    const shared = workspaceAccount(registry, request.workspaceId, provider);
+    if (shared !== null) stale = shared.id;
+    const env = shared === null ? undefined : await usableEnv(shared, provider, request, deps);
+    if (shared !== null && env !== undefined) {
+      await bindNewChat(shared, provider, request, deps, "plain");
+      return env;
+    }
+  }
+
+  const checked = asked === AUTO ? ({ state: "auto" } as const) : await checkDefault(registry, provider, { directoryExists: deps.directoryExists });
+  if (checked.state === "broken") throw refuse(checked.problem, { label: checked.label });
+  if (checked.state === "ok") {
+    const env = { ...request.env, ...envFor(checked.account, deps.defaultDir()) };
+    await bindNewChat(checked.account, provider, request, deps, "plain");
+    return env;
+  }
+  if (checked.state === "auto") {
+    const picked = (await deps.autoPick?.(provider)) ?? null;
+    const env = picked === null ? undefined : await accountEnv(picked, provider, request, deps);
+    if (picked !== null && env !== undefined) {
+      const landed = await bindNewChat(picked, provider, request, deps, "auto", stale);
+      const landedEnv = landed.id === picked.id ? env : await accountEnv(landed, provider, request, deps);
+      if (landedEnv !== undefined) {
+        log(`accounts: ${request.agentId} opens on ${landed.id} (automatic)`);
+        return landedEnv;
+      }
+      // The workspace was pinned meanwhile to an account that cannot open the chat: keep the pick.
+      await bindNewChat(picked, provider, request, deps, "plain");
+      log(`accounts: ${request.agentId} opens on ${picked.id} (automatic)`);
+      return env;
+    }
+  }
+
+  // No default, or nothing to pick: the chat runs on its own directory's login, which is fine
+  // when there is one.
+  if (provider !== "claude" || deps.ownLogin === undefined) return undefined;
+  const own = await deps.ownLogin(request);
+  if (own.loggedIn !== false) return undefined;
+  if (checked.state === "auto") throw refuse("auto-none", { dir: own.dir });
+  throw refuse(defaultOptions(registry, provider).length > 0 ? "not-set" : "no-accounts", { dir: own.dir });
+}
+
+/**
+ * Binds a new chat to the account it opens on, so the pill names it, and returns that account.
+ * One step against other writers, so chats starting together cannot drop each other's binding.
+ *
+ * `explicit` and `auto` also give the account to the chat's workspace when it has none yet, so
+ * the task's next chats follow this one. An `auto` pick yields to an account another chat of the
+ * workspace pinned while this one was picking: chats started together stay on one account.
+ * `stale` names a workspace account that could not open the chat; it is replaced, not adopted.
+ */
+async function bindNewChat(
+  account: Account,
+  provider: string,
+  request: SessionRequest,
+  deps: HookDeps,
+  mode: "plain" | "explicit" | "auto",
+  /** A workspace account already found unusable: treated as no account, and replaced. */
+  stale: string | null = null,
+): Promise<Account> {
+  const workspaceId = request.workspaceId;
+  let landed = account;
+  const change = (registry: Registry): Registry => {
+    const found = workspaceId === null ? null : workspaceAccount(registry, workspaceId, provider);
+    const pinned = found !== null && found.id === stale ? null : found;
+    landed = mode === "auto" && pinned !== null ? pinned : account;
+    let next = applyBinding(registry, { agentId: request.agentId, account: landed.id });
+    if (mode !== "plain" && workspaceId !== null && pinned === null) {
+      next = bindWorkspace(next, { workspaceId, provider, account: landed.id, auto: mode === "auto" });
+    }
+    return next;
+  };
+  if (deps.update !== undefined) await deps.update(change);
+  else await deps.writeRegistry(change(await deps.readRegistry()));
+  return landed;
+}
+
+/** `accountEnv`, and passed over as well when the account is known to be logged out. */
+async function usableEnv(
+  account: Account,
   provider: string,
   request: SessionRequest,
   deps: HookDeps,
 ): Promise<Record<string, string> | undefined> {
-  const refuse = (code: RefusalCode, values: { label?: string; dir?: string }) =>
-    new SessionRefused(code, deps.refusalText?.(code, values) ?? `no account for this chat (${code})`);
-
-  const checked = await checkDefault(registry, provider, { directoryExists: deps.directoryExists });
-  if (checked.state === "broken") throw refuse(checked.problem, { label: checked.label });
-  if (checked.state === "ok") {
-    const env = { ...request.env, ...envFor(checked.account, deps.defaultDir()) };
-    await deps.writeRegistry(applyBinding(await deps.readRegistry(), { agentId: request.agentId, account: checked.account.id }));
-    return env;
-  }
-
-  // No default: the chat runs on its own directory's login, which is fine when there is one.
-  if (provider !== "claude" || deps.ownLogin === undefined) return undefined;
-  const own = await deps.ownLogin(request);
-  if (own.loggedIn !== false) return undefined;
-  throw refuse(defaultOptions(registry, provider).length > 0 ? "not-set" : "no-accounts", { dir: own.dir });
+  const env = await accountEnv(account, provider, request, deps);
+  if (env === undefined) return undefined;
+  return (await deps.loggedIn?.(account.home)) === false ? undefined : env;
 }
 
 /** What `account` contributes to a session of `provider`, or undefined when it cannot. The

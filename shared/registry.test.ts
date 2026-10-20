@@ -12,6 +12,13 @@ import {
   resolveAccount,
   defaultAccount,
   setDefault,
+  bindWorkspace,
+  forgetWorkspace,
+  workspaceAccount,
+  unpinAutomatic,
+  unpinWorkspaces,
+  pinKey,
+  AUTO,
   type Registry,
 } from "./registry.ts";
 
@@ -200,4 +207,72 @@ test("setting a default leaves every binding alone, and clearing it removes only
   assert.deepEqual(set.agents, { a1: "work" });
   assert.deepEqual(setDefault(set, "claude", null).defaults, { codex: "cdx" });
   assert.deepEqual(base.defaults, { codex: "cdx" }, "the input is not mutated");
+});
+
+test("a workspace account is per provider, and clearing the last one drops the workspace", () => {
+  let r = bindWorkspace(registry(), { workspaceId: "wks_1", provider: "claude", account: "work" });
+  assert.equal(workspaceAccount(r, "wks_1", "claude")?.id, "work");
+  assert.equal(workspaceAccount(r, "wks_1", "codex"), null);
+  assert.equal(workspaceAccount(r, "wks_2", "claude"), null);
+  r = bindWorkspace(r, { workspaceId: "wks_1", provider: "claude", account: null });
+  assert.deepEqual(r.workspaces, {});
+});
+
+test("a workspace account that names a gone account, or another provider's, resolves to null", () => {
+  const r = { ...registry(), workspaces: { wks_1: { claude: "gone" }, wks_2: { codex: "work" } } };
+  assert.equal(workspaceAccount(r, "wks_1", "claude"), null);
+  assert.equal(workspaceAccount(r, "wks_2", "codex"), null);
+});
+
+test("forgetting a workspace drops its accounts and leaves the others", () => {
+  const r = { ...registry(), workspaces: { wks_1: { claude: "work" }, wks_2: { claude: "default" } } };
+  assert.deepEqual(forgetWorkspace(r, "wks_1").workspaces, { wks_2: { claude: "default" } });
+  assert.equal(forgetWorkspace(r, "wks_9"), r, "an unknown workspace changes nothing");
+});
+
+test("removing an account drops it from every workspace", () => {
+  const r = { ...registry(), workspaces: { wks_1: { claude: "work" }, wks_2: { claude: "default" } } };
+  const result = removeAccounts(r, ["work"]);
+  assert.ok(result.ok);
+  assert.deepEqual(result.registry.workspaces, { wks_2: { claude: "default" } });
+});
+
+test("workspace accounts and an automatic default survive a round trip through the state file", () => {
+  const r = { ...setDefault(registry(), "claude", AUTO), workspaces: { wks_1: { claude: "work" } } };
+  const parsed = parseRegistry(JSON.parse(JSON.stringify(r)));
+  assert.deepEqual(parsed?.workspaces, { wks_1: { claude: "work" } });
+  assert.equal(parsed?.defaults?.claude, AUTO);
+  assert.equal(defaultAccount(r, "claude"), null, "the automatic default is not an account");
+});
+
+test("an automatic pin is marked as such; a person's pin of the same workspace clears the mark", () => {
+  let r = bindWorkspace(registry(), { workspaceId: "wks_1", provider: "claude", account: "work", auto: true });
+  assert.deepEqual(r.autoPins, [pinKey("wks_1", "claude")]);
+  r = bindWorkspace(r, { workspaceId: "wks_1", provider: "claude", account: "default" });
+  assert.deepEqual(r.autoPins, []);
+  assert.equal(workspaceAccount(r, "wks_1", "claude")?.id, "default");
+});
+
+test("changing the default clears automatic pins of that provider and keeps a person's", () => {
+  let r = bindWorkspace(registry(), { workspaceId: "auto-ws", provider: "claude", account: "work", auto: true });
+  r = bindWorkspace(r, { workspaceId: "mine", provider: "claude", account: "work" });
+  r = bindWorkspace(r, { workspaceId: "auto-codex", provider: "codex", account: "work", auto: true });
+  const next = unpinAutomatic(r, "claude");
+  assert.equal(workspaceAccount(next, "auto-ws", "claude"), null);
+  assert.equal(workspaceAccount(next, "mine", "claude")?.id, "work");
+  assert.equal(next.workspaces?.["auto-codex"]?.codex, "work", "another provider's pin is not touched");
+  assert.deepEqual(next.autoPins, [pinKey("auto-codex", "codex")]);
+});
+
+test("pins without a mark, as from before marks existed, count as a person's", () => {
+  const r = { ...registry(), workspaces: { old: { claude: "work" } } };
+  assert.equal(unpinAutomatic(r, "claude").workspaces?.old?.claude, "work");
+});
+
+test("forgetting a workspace or unpinning all also drops their marks, and marks survive the state file", () => {
+  let r = bindWorkspace(registry(), { workspaceId: "wks_1", provider: "claude", account: "work", auto: true });
+  r = bindWorkspace(r, { workspaceId: "wks_2", provider: "claude", account: "work", auto: true });
+  assert.deepEqual(parseRegistry(JSON.parse(JSON.stringify(r)))?.autoPins, r.autoPins);
+  assert.deepEqual(forgetWorkspace(r, "wks_1").autoPins, [pinKey("wks_2", "claude")]);
+  assert.deepEqual(unpinWorkspaces(r, "claude").autoPins, []);
 });

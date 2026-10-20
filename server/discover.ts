@@ -184,6 +184,7 @@ function toView(dir: string, identity: Identity, provider: ProviderId): AccountV
     accountIds: [],
     switchTo: "",
     isDefault: false,
+    autoNow: false,
     usage: "unauthorised" as const,
     fiveHour: null,
     sevenDay: null,

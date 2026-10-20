@@ -12,9 +12,19 @@ export const preferences = defineSettings({
     language: z.enum(["auto", "en", "ru", "uk"]).default("auto"),
     /** The composer pill above every Claude chat, which is where switching happens. */
     showPill: z.boolean().default(true),
+    /** How Auto picks among accounts with room; see shared/auto.ts. */
+    autoPolicy: z.enum(["burn-first", "most-room"]).default("burn-first"),
+    /** Whether Auto's first pick in a workspace holds for the workspace's later chats. Off:
+     *  every new chat is picked on its own. */
+    oneAccountPerWorkspace: z.boolean().default(false),
   }),
 });
 
 export type Preferences = z.output<typeof preferences.schema>;
 
-export const defaultPreferences: Preferences = { language: "auto", showPill: true };
+export const defaultPreferences: Preferences = {
+  language: "auto",
+  showPill: true,
+  autoPolicy: "burn-first",
+  oneAccountPerWorkspace: false,
+};

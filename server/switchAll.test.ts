@@ -201,6 +201,17 @@ test("listChats follows every page and leaves archived chats out", async () => {
   assert.deepEqual(cursors, [undefined, "p2"]);
 });
 
+test("moving all chats clears every workspace's account for the provider, and only for it", async () => {
+  const fake = deps([]);
+  const seeded = await fake.deps.readRegistry();
+  await fake.deps.writeRegistry({
+    ...seeded,
+    workspaces: { wks_1: { claude: "work" }, wks_2: { claude: "work", codex: "codex" } },
+  });
+  await switchAll("personal", fake.deps);
+  assert.deepEqual(fake.stored().workspaces, { wks_2: { codex: "codex" } });
+});
+
 test("an idle chat whose first turn was never saved is skipped, not restarted into a broken session", async () => {
   const log: string[] = [];
   const now = new Date().toISOString();

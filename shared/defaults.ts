@@ -19,7 +19,14 @@ export type RefusalCode =
   /** No default is set and the chat's own directory is not logged in. */
   | "not-set"
   /** As `not-set`, and no account could be chosen as a default either. */
-  | "no-accounts";
+  | "no-accounts"
+  /** The default is Auto, no account could be picked, and the chat's own directory is not
+   *  logged in either. */
+  | "auto-none"
+  /** `PASEO_CLAUDE_ACCOUNT` names an account that is not in the list (or is another provider's). */
+  | "asked-unknown"
+  /** `PASEO_CLAUDE_ACCOUNT` names an account whose directory is gone. */
+  | "asked-missing-directory";
 
 export const defaultOption = z.object({
   id: z.string(),
@@ -65,6 +72,9 @@ export function refusalText(strings: Strings, code: RefusalCode, values: { label
     "missing-directory": strings.refuseDefaultMissingDir,
     "not-set": strings.refuseNotSet,
     "no-accounts": strings.refuseNoAccounts,
+    "auto-none": strings.refuseAutoNone,
+    "asked-unknown": strings.refuseAskedUnknown,
+    "asked-missing-directory": strings.refuseAskedMissingDir,
   }[code];
   return template.replace("{label}", values.label ?? "").replace("{dir}", values.dir ?? "");
 }

@@ -5,6 +5,7 @@ import { Text, View } from "react-native";
 import { type DefaultProblem, defaultProblem, getDefaultRpc, refusalText, setDefaultRpc } from "../shared/defaults.ts";
 import { type Strings, t } from "../shared/i18n.ts";
 import { detectAppLocale } from "./locale.ts";
+import { AUTO } from "../shared/registry.ts";
 import { type Preferences, defaultPreferences, preferences } from "../shared/settings.ts";
 import { setPillsVisible } from "./pill.tsx";
 import { typeScale } from "./typography.ts";
@@ -14,7 +15,7 @@ import { Banner } from "./ui.tsx";
 const NONE = "";
 
 /** Settings → Plugins → Accounts: the language, whether the pill shows, and the account new
- *  chats open on. */
+ *  chats open on (one account, or picked by allowance as each opens). */
 export function AccountsSettings({ theme }: PluginSurfaceProps) {
   const state = useSettings(preferences);
   const values: Preferences = state.status === "ready" ? state.values : defaultPreferences;
@@ -53,9 +54,10 @@ export function AccountsSettings({ theme }: PluginSurfaceProps) {
   const labelOf = (id: string) => options.find((option) => option.id === id)?.label ?? id;
   const defaultChoices = [
     { label: strings.defaultSettingNone, value: NONE },
+    { label: strings.defaultSettingAuto, value: AUTO },
     ...options.map((option) => ({ label: option.label, value: option.id })),
     // A default that is no longer offered (the account was removed) still shows as what is set.
-    ...(chosen !== NONE && !options.some((option) => option.id === chosen)
+    ...(chosen !== NONE && chosen !== AUTO && !options.some((option) => option.id === chosen)
       ? [{ label: current?.label || chosen, value: chosen }]
       : []),
   ];
@@ -109,6 +111,24 @@ export function AccountsSettings({ theme }: PluginSurfaceProps) {
             options={defaultChoices}
             disabled={current === null || saving}
             onValueChange={choose}
+          />
+          <SettingsSelect
+            label={strings.autoPolicyLabel}
+            hint={strings.autoPolicyHint}
+            value={values.autoPolicy}
+            options={[
+              { label: strings.autoPolicyBurn, value: "burn-first" },
+              { label: strings.autoPolicyRoom, value: "most-room" },
+            ]}
+            disabled={busy}
+            onValueChange={(autoPolicy) => save({ autoPolicy })}
+          />
+          <SettingsSwitch
+            label={strings.perWorkspaceLabel}
+            hint={strings.perWorkspaceHint}
+            value={values.oneAccountPerWorkspace}
+            disabled={busy}
+            onValueChange={(oneAccountPerWorkspace) => save({ oneAccountPerWorkspace })}
           />
         </SettingsCard>
       </SettingsSection>
