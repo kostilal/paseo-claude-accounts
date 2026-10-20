@@ -113,6 +113,9 @@ export interface Strings {
   workspaceDefault: string;
   workspaceFolder: string;
   workspaceFailed: string;
+  /** The popover's second section: the default for every new chat. */
+  workspaceEverywhere: string;
+  workspaceEverywhereHint: string;
   /** `{label}` is the id `PASEO_CLAUDE_ACCOUNT` names, or the account's label. */
   refuseAskedUnknown: string;
   refuseAskedMissingDir: string;
@@ -224,6 +227,8 @@ const en: Strings = {
   workspaceDefault: "Default ({label})",
   workspaceFolder: "Each chat's folder login",
   workspaceFailed: "Could not set this workspace's account.",
+  workspaceEverywhere: "For all new chats",
+  workspaceEverywhereHint: "The default. Workspaces Auto placed follow it; ones you chose above keep theirs.",
   refuseAskedUnknown: "This chat was started with PASEO_CLAUDE_ACCOUNT={label}, and there is no such Claude account. Use the account's id (its folder name: work for ~/.claude-work), or @auto.",
   refuseAskedMissingDir: "This chat was started with PASEO_CLAUDE_ACCOUNT={label}, but that account's folder is gone. Log in to it again on the Accounts screen, or start the chat without it.",
   refuseAutoNone: "This chat has no Claude account: Auto found no logged-in account to pick, and nobody is logged in to {dir}. Log in on the Accounts screen.",
@@ -332,6 +337,8 @@ const ru: Strings = {
   workspaceDefault: "По умолчанию ({label})",
   workspaceFolder: "Вход папки каждого чата",
   workspaceFailed: "Не удалось задать аккаунт воркспейса.",
+  workspaceEverywhere: "Для всех новых чатов",
+  workspaceEverywhereHint: "По умолчанию. Воркспейсы, которые выбрал Авто, перейдут на него; выбранные вами выше останутся.",
   refuseAskedUnknown: "Этот чат запущен с PASEO_CLAUDE_ACCOUNT={label}, а такого аккаунта Claude нет. Укажи id аккаунта (имя его папки: work для ~/.claude-work) или @auto.",
   refuseAskedMissingDir: "Этот чат запущен с PASEO_CLAUDE_ACCOUNT={label}, но папки этого аккаунта больше нет. Войди в него снова на экране аккаунтов или запусти чат без этой переменной.",
   refuseAutoNone: "У этого чата нет аккаунта Claude: Авто не нашёл ни одного аккаунта со входом, и в {dir} тоже никто не вошёл. Войди на экране аккаунтов.",
@@ -440,6 +447,8 @@ const uk: Strings = {
   workspaceDefault: "За замовчуванням ({label})",
   workspaceFolder: "Вхід теки кожного чату",
   workspaceFailed: "Не вдалося задати акаунт воркспейсу.",
+  workspaceEverywhere: "Для всіх нових чатів",
+  workspaceEverywhereHint: "За замовчуванням. Воркспейси, які обрав Авто, перейдуть на нього; обрані вами вище лишаться.",
   refuseAskedUnknown: "Цей чат запущено з PASEO_CLAUDE_ACCOUNT={label}, а такого акаунта Claude немає. Вкажи id акаунта (назву його теки: work для ~/.claude-work) або @auto.",
   refuseAskedMissingDir: "Цей чат запущено з PASEO_CLAUDE_ACCOUNT={label}, але теки цього акаунта більше немає. Увійди в нього знову на екрані акаунтів або запусти чат без цієї змінної.",
   refuseAutoNone: "Цей чат не має акаунта Claude: Авто не знайшов жодного акаунта зі входом, і в {dir} теж ніхто не увійшов. Увійди на екрані акаунтів.",

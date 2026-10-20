@@ -28,6 +28,7 @@ import {
   removeAccounts,
   setDefault,
   unhideHomes,
+  unpinAutomatic,
   workspaceAccount,
 } from "./shared/registry.ts";
 import { preferences } from "./shared/settings.ts";
@@ -328,14 +329,17 @@ export default function contribute(server: PluginServerContext) {
     if (!isProviderId(input.provider) || !PROVIDERS[input.provider].supported) return { code: "unsupported-provider" as const };
     const read = await loadRegistry();
     if (read.state === "unreadable") return { code: "registry-unreadable" as const };
-    if (input.account === "") {
-      await persist(setDefault(read.registry, input.provider, null));
-      return { code: "" as const };
+    const account = input.account === "" ? null : input.account;
+    // The same default again changes nothing: releasing Auto's workspaces now would quietly
+    // move their tasks onto a fresh pick.
+    if ((read.registry.defaults?.[input.provider] ?? null) === account) return { code: "" as const };
+    if (account !== null) {
+      // Refuse a default the hook could not use, before anything is written.
+      const checked = await checkDefault(setDefault(read.registry, input.provider, account), input.provider, { directoryExists });
+      if (checked.state === "broken") return { code: checked.problem };
     }
-    // Refuse a default the hook could not use, before anything is written.
-    const checked = await checkDefault(setDefault(read.registry, input.provider, input.account), input.provider, { directoryExists });
-    if (checked.state === "broken") return { code: checked.problem };
-    await persist(setDefault(read.registry, input.provider, input.account));
+    // Workspaces an automatic pick placed follow the new default; a person's choice stays.
+    await update((registry) => unpinAutomatic(setDefault(registry, input.provider, account), input.provider));
     return { code: "" as const };
   });
 
@@ -438,7 +442,7 @@ export default function contribute(server: PluginServerContext) {
     const accounts = (await loginRows(registry, input.manual))
       .filter((row) => row.provider === input.provider)
       .map((row) => ({ ...row, current: own !== null && row.accountIds.includes(own.id) }));
-    return { account: own?.id ?? "", next, accounts };
+    return { account: own?.id ?? "", default: registry.defaults?.[input.provider] ?? "", next, accounts };
   });
 
   // Only decides where chats opened in the workspace from now on land; no binding is touched.

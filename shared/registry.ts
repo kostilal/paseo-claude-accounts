@@ -29,6 +29,14 @@ export interface Registry {
    *  chat of one task runs on one account. Set by the workspace's header button, and by the
    *  first chat an automatic pick placed in the workspace. */
   workspaces?: Record<string, Record<string, string>>;
+  /** The workspace accounts an automatic pick set rather than a person (`pinKey`). Changing
+   *  the default clears these, so new chats everywhere follow it; a person's choice stays. */
+  autoPins?: string[];
+}
+
+/** One workspace account's key in `autoPins`. Neither id can hold a newline. */
+export function pinKey(workspaceId: string, provider: string): string {
+  return `${workspaceId}\n${provider}`;
 }
 
 /** The default that is not an account: pick one by its allowance when each chat opens. Account
@@ -56,6 +64,7 @@ const stored = z.object({
   hidden: z.array(z.string()).default([]),
   defaults: z.record(z.string(), z.string()).optional(),
   workspaces: z.record(z.string(), z.record(z.string(), z.string())).optional(),
+  autoPins: z.array(z.string()).optional(),
 });
 
 /**
@@ -109,7 +118,7 @@ export function workspaceAccount(registry: Registry, workspaceId: string, provid
  *  open in it keep theirs. */
 export function bindWorkspace(
   registry: Registry,
-  request: { workspaceId: string; provider: string; account: string | null },
+  request: { workspaceId: string; provider: string; account: string | null; auto?: boolean },
 ): Registry {
   const workspaces = { ...registry.workspaces };
   const own = { ...workspaces[request.workspaceId] };
@@ -117,7 +126,22 @@ export function bindWorkspace(
   else own[request.provider] = request.account;
   if (Object.keys(own).length === 0) delete workspaces[request.workspaceId];
   else workspaces[request.workspaceId] = own;
-  return { ...registry, workspaces };
+  const key = pinKey(request.workspaceId, request.provider);
+  const autoPins = (registry.autoPins ?? []).filter((pin) => pin !== key);
+  if (request.account !== null && request.auto === true) autoPins.push(key);
+  return { ...registry, workspaces, autoPins };
+}
+
+/** The workspace accounts an automatic pick set for `provider` cleared, so new chats there
+ *  follow the default again. Accounts a person chose for a workspace are kept. */
+export function unpinAutomatic(registry: Registry, provider: string): Registry {
+  let next = registry;
+  for (const key of registry.autoPins ?? []) {
+    const [workspaceId, pinned] = key.split("\n");
+    if (pinned !== provider || workspaceId === undefined) continue;
+    next = bindWorkspace(next, { workspaceId, provider, account: null });
+  }
+  return next;
 }
 
 /** Every workspace's account for `provider` cleared, so new chats follow the default again. */
@@ -129,7 +153,8 @@ export function unpinWorkspaces(registry: Registry, provider: string): Registry 
     delete own[provider];
     if (Object.keys(own).length > 0) workspaces[workspaceId] = own;
   }
-  return { ...registry, workspaces };
+  const autoPins = (registry.autoPins ?? []).filter((key) => !key.endsWith(`\n${provider}`));
+  return { ...registry, workspaces, autoPins };
 }
 
 /** Forgets a workspace's accounts, for when the workspace is archived. */
@@ -137,7 +162,8 @@ export function forgetWorkspace(registry: Registry, workspaceId: string): Regist
   if (registry.workspaces?.[workspaceId] === undefined) return registry;
   const workspaces = { ...registry.workspaces };
   delete workspaces[workspaceId];
-  return { ...registry, workspaces };
+  const autoPins = (registry.autoPins ?? []).filter((key) => !key.startsWith(`${workspaceId}\n`));
+  return { ...registry, workspaces, autoPins };
 }
 
 /** One agent binding set, or cleared with `account: null`. */

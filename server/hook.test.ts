@@ -531,3 +531,13 @@ test("no attachment, no first chat, or an environment that already names an acco
     undefined,
   );
 });
+
+test("a workspace pinned by an automatic pick is marked automatic; one pinned by the environment is not", async () => {
+  const auto = starting({ defaults: { claude: "@auto" } });
+  await sessionEnv(created(), auto.deps);
+  assert.deepEqual(auto.stored().autoPins, ["wks_1\nclaude"]);
+
+  const asked = starting();
+  await sessionEnv(created({ env: { PASEO_CLAUDE_ACCOUNT: "keyed" } }), asked.deps);
+  assert.deepEqual(asked.stored().autoPins ?? [], []);
+});

@@ -19,7 +19,9 @@ composer: the session restarts on that account and the conversation carries on.
   login: Paseo shows what to choose instead of an auth error.
 - **Per workspace.** The **Users** button in a workspace's header chooses the account its new
   chats open on, so every chat of one task runs on one account. Under Auto, the first chat in a
-  workspace chooses it for the rest. A workspace account that cannot be used (folder gone,
+  workspace chooses it for the rest. The same popover's second section, **For all new chats**,
+  sets the default: workspaces Auto placed follow it, workspaces you chose an account for keep
+  theirs. A workspace account that cannot be used (folder gone,
   logged out) is passed over. "Move all chats here" clears every workspace's account.
 - **On the new-workspace screen**, where there is no workspace header yet: **+** in the composer →
   **Claude account** starts the first chat on the account you pick (or on Auto's pick), and the

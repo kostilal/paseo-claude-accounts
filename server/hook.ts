@@ -230,7 +230,7 @@ async function bindNewChat(
     landed = mode === "auto" && pinned !== null ? pinned : account;
     let next = applyBinding(registry, { agentId: request.agentId, account: landed.id });
     if (mode !== "plain" && workspaceId !== null && pinned === null) {
-      next = bindWorkspace(next, { workspaceId, provider, account: landed.id });
+      next = bindWorkspace(next, { workspaceId, provider, account: landed.id, auto: mode === "auto" });
     }
     return next;
   };

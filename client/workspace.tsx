@@ -6,6 +6,8 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { type Strings, t } from "../shared/i18n.ts";
 import type { PillAccount } from "../shared/switch.ts";
+import { setDefaultRpc } from "../shared/defaults.ts";
+import { AUTO } from "../shared/registry.ts";
 import { type WorkspaceState, setWorkspaceRpc, workspaceStateRpc } from "../shared/workspace.ts";
 import { tightestOf, usageLine, weekLine } from "./format.ts";
 import { detectAppLocale, useStrings } from "./locale.ts";
@@ -41,8 +43,10 @@ function WorkspacePopover(props: PluginButtonContentProps) {
   const strings = useStrings();
   const askState = useRpc(workspaceStateRpc);
   const setAccount = useRpc(setWorkspaceRpc);
+  const setEverywhere = useRpc(setDefaultRpc);
   const queries = useQueryClient();
   const [failed, setFailed] = useState(false);
+  const [failedDefault, setFailedDefault] = useState(false);
 
   const key = workspaceKey(workspaceId);
   const { data, isError } = useQuery({
@@ -59,6 +63,17 @@ function WorkspacePopover(props: PluginButtonContentProps) {
         close();
       }, () => setFailed(true))
       .finally(() => void queries.invalidateQueries({ queryKey: key }));
+  }
+
+  /** The default for every new chat. The popover stays open, so the change is seen in both
+   *  sections: workspaces an automatic pick placed (this one too, maybe) follow it. */
+  function chooseEverywhere(account: string) {
+    setFailedDefault(false);
+    void setEverywhere({ provider: "claude", account })
+      .then((result) => {
+        if (result.code !== "") setFailedDefault(true);
+      }, () => setFailedDefault(true))
+      .finally(() => void queries.invalidateQueries({ queryKey: ["accounts"] }));
   }
 
   const now = Date.now();
@@ -86,6 +101,22 @@ function WorkspacePopover(props: PluginButtonContentProps) {
                 onPress={() => choose(row.switchTo)}
               />
             ))}
+            <Text style={{ ...typeScale.body, fontWeight: "600", color: theme.colors.foreground, marginTop: 8 }}>
+              {strings.workspaceEverywhere}
+            </Text>
+            <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }}>{strings.workspaceEverywhereHint}</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              <Choice theme={theme} label={strings.workspaceAutoNone} selected={data.default === AUTO} onPress={() => chooseEverywhere(AUTO)} />
+              {rows.map((row) => (
+                <Choice
+                  key={row.key}
+                  theme={theme}
+                  label={row.email || row.label}
+                  selected={row.accountIds.includes(data.default)}
+                  onPress={() => chooseEverywhere(row.switchTo)}
+                />
+              ))}
+            </View>
           </View>
         )
       ) : isError ? (
@@ -97,7 +128,33 @@ function WorkspacePopover(props: PluginButtonContentProps) {
         </View>
       )}
       {failed && <Banner theme={theme} tone="bad" text={strings.workspaceFailed} />}
+      {failedDefault && <Banner theme={theme} tone="bad" text={strings.defaultSettingFailed} />}
     </View>
+  );
+}
+
+/** A compact choice for the default, so the two sections do not read alike. */
+function Choice(props: { theme: PluginButtonContentProps["theme"]; label: string; selected: boolean; onPress(): void }) {
+  const { theme, label, selected, onPress } = props;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={{
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 999,
+        borderWidth: selected ? 2 : 1,
+        borderColor: selected ? theme.colors.accent : theme.colors.border,
+        backgroundColor: selected ? theme.colors.surface2 : theme.colors.surface1,
+      }}
+    >
+      <Text style={{ ...typeScale.meta, color: theme.colors.foreground, fontWeight: selected ? "600" : "400" }} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
