@@ -99,6 +99,32 @@ export interface Strings {
   moveAllBusy: string;
   moveAllFailed: string;
   moveAllError: string;
+  /** The default that picks by allowance as each chat opens. */
+  defaultSettingAuto: string;
+  /** Above a chat on a nearly full account. `{window}` is `fiveHourUsage` or `sevenDayUsage`,
+   *  `{pct}` the share used. */
+  pillNearlyFull: string;
+  /** The workspace header button and its popover. */
+  workspaceTitle: string;
+  workspaceHint: string;
+  /** The row that gives the choice back to the default. `{label}` is what it picks now. */
+  workspaceAuto: string;
+  workspaceAutoNone: string;
+  workspaceDefault: string;
+  workspaceFolder: string;
+  workspaceFailed: string;
+  /** `{label}` is the id `PASEO_CLAUDE_ACCOUNT` names, or the account's label. */
+  refuseAskedUnknown: string;
+  refuseAskedMissingDir: string;
+  refuseAutoNone: string;
+  /** The composer's "+" menu entry and its picker. */
+  attachTitle: string;
+  attachPickerTitle: string;
+  attachSearch: string;
+  attachAutoTitle: string;
+  /** What the chat's agent reads; `{label}` is the login. */
+  attachAccountText: string;
+  attachAutoText: string;
 }
 
 const en: Strings = {
@@ -162,7 +188,7 @@ const en: Strings = {
   settingsHint: "Changes apply immediately.",
   defaultSetting: "Default account for new chats",
   defaultSettingNone: "Not set: a chat uses its folder's login",
-  defaultSettingHint: "A new chat opens on this account. Existing chats keep theirs; to move them, use \"Move all chats here\" on the Accounts screen.",
+  defaultSettingHint: "A new chat opens on this account. Auto picks, as each chat opens, the account whose week resets soonest while it has room. Existing chats keep theirs; to move them, use \"Move all chats here\" on the Accounts screen.",
   defaultSettingEmpty: "No accounts yet. Log in to one on the Accounts screen to choose it here.",
   defaultSettingFailed: "Could not save the default account.",
   refuseDefaultGone: "The default account for new chats is no longer in the list. Choose another in Settings → Plugins → Claude Accounts.",
@@ -189,6 +215,24 @@ const en: Strings = {
   moveAllBusy: "{skipped} busy",
   moveAllFailed: "{failed} failed",
   moveAllError: "Could not move",
+  defaultSettingAuto: "Auto",
+  pillNearlyFull: "{window}: {pct}% used. If this chat needs more room, switch it to another account below.",
+  workspaceTitle: "Account for new chats here",
+  workspaceHint: "New chats in this workspace open on this account. Open chats keep theirs.",
+  workspaceAuto: "Auto (now {label})",
+  workspaceAutoNone: "Auto",
+  workspaceDefault: "Default ({label})",
+  workspaceFolder: "Each chat's folder login",
+  workspaceFailed: "Could not set this workspace's account.",
+  refuseAskedUnknown: "This chat was started with PASEO_CLAUDE_ACCOUNT={label}, and there is no such Claude account. Use the account's id (its folder name: work for ~/.claude-work), or @auto.",
+  refuseAskedMissingDir: "This chat was started with PASEO_CLAUDE_ACCOUNT={label}, but that account's folder is gone. Log in to it again on the Accounts screen, or start the chat without it.",
+  refuseAutoNone: "This chat has no Claude account: Auto found no logged-in account to pick, and nobody is logged in to {dir}. Log in on the Accounts screen.",
+  attachTitle: "Claude account",
+  attachPickerTitle: "Start this chat on",
+  attachSearch: "Search accounts",
+  attachAutoTitle: "Pick by allowance",
+  attachAccountText: "This chat was started on the Claude account {label}.",
+  attachAutoText: "This chat was started on the Claude account with the most suitable allowance.",
 };
 
 const ru: Strings = {
@@ -252,7 +296,7 @@ const ru: Strings = {
   settingsHint: "Изменения применяются сразу.",
   defaultSetting: "Аккаунт по умолчанию для новых чатов",
   defaultSettingNone: "Не задан: чат берёт вход своей папки",
-  defaultSettingHint: "Новый чат открывается на этом аккаунте. Существующие чаты остаются на своих; перенести их можно кнопкой «Перевести все чаты сюда» на экране аккаунтов.",
+  defaultSettingHint: "Новый чат открывается на этом аккаунте. Авто при открытии каждого чата берёт аккаунт, у которого неделя сбросится раньше всех, пока есть запас. Существующие чаты остаются на своих; перенести их можно кнопкой «Перевести все чаты сюда» на экране аккаунтов.",
   defaultSettingEmpty: "Аккаунтов пока нет. Войди в один на экране аккаунтов, чтобы выбрать его здесь.",
   defaultSettingFailed: "Не удалось сохранить аккаунт по умолчанию.",
   refuseDefaultGone: "Аккаунта по умолчанию для новых чатов больше нет в списке. Выбери другой в разделе Настройки → Плагины → Claude Accounts.",
@@ -279,6 +323,24 @@ const ru: Strings = {
   moveAllBusy: "занято: {skipped}",
   moveAllFailed: "ошибок: {failed}",
   moveAllError: "Не вышло",
+  defaultSettingAuto: "Авто",
+  pillNearlyFull: "{window}: использовано {pct}%. Если этому чату нужно больше, переключи его на другой аккаунт ниже.",
+  workspaceTitle: "Аккаунт для новых чатов здесь",
+  workspaceHint: "Новые чаты в этом воркспейсе открываются на этом аккаунте. Открытые чаты остаются на своих.",
+  workspaceAuto: "Авто (сейчас {label})",
+  workspaceAutoNone: "Авто",
+  workspaceDefault: "По умолчанию ({label})",
+  workspaceFolder: "Вход папки каждого чата",
+  workspaceFailed: "Не удалось задать аккаунт воркспейса.",
+  refuseAskedUnknown: "Этот чат запущен с PASEO_CLAUDE_ACCOUNT={label}, а такого аккаунта Claude нет. Укажи id аккаунта (имя его папки: work для ~/.claude-work) или @auto.",
+  refuseAskedMissingDir: "Этот чат запущен с PASEO_CLAUDE_ACCOUNT={label}, но папки этого аккаунта больше нет. Войди в него снова на экране аккаунтов или запусти чат без этой переменной.",
+  refuseAutoNone: "У этого чата нет аккаунта Claude: Авто не нашёл ни одного аккаунта со входом, и в {dir} тоже никто не вошёл. Войди на экране аккаунтов.",
+  attachTitle: "Аккаунт Claude",
+  attachPickerTitle: "Начать этот чат на",
+  attachSearch: "Поиск аккаунтов",
+  attachAutoTitle: "Выбрать по лимитам",
+  attachAccountText: "Этот чат запущен на аккаунте Claude {label}.",
+  attachAutoText: "Этот чат запущен на аккаунте Claude с самым подходящим лимитом.",
 };
 
 const uk: Strings = {
@@ -342,7 +404,7 @@ const uk: Strings = {
   settingsHint: "Зміни застосовуються одразу.",
   defaultSetting: "Акаунт за замовчуванням для нових чатів",
   defaultSettingNone: "Не задано: чат бере вхід своєї теки",
-  defaultSettingHint: "Новий чат відкривається на цьому акаунті. Наявні чати лишаються на своїх; перенести їх можна кнопкою «Перевести всі чати сюди» на екрані акаунтів.",
+  defaultSettingHint: "Новий чат відкривається на цьому акаунті. Авто під час відкриття кожного чату бере акаунт, у якого тиждень відкотиться найраніше, поки є запас. Наявні чати лишаються на своїх; перенести їх можна кнопкою «Перевести всі чати сюди» на екрані акаунтів.",
   defaultSettingEmpty: "Акаунтів поки немає. Увійди в один на екрані акаунтів, щоб обрати його тут.",
   defaultSettingFailed: "Не вдалося зберегти акаунт за замовчуванням.",
   refuseDefaultGone: "Акаунта за замовчуванням для нових чатів більше немає у списку. Обери інший у розділі Налаштування → Плагіни → Claude Accounts.",
@@ -369,6 +431,24 @@ const uk: Strings = {
   moveAllBusy: "зайнято: {skipped}",
   moveAllFailed: "помилок: {failed}",
   moveAllError: "Не вдалося",
+  defaultSettingAuto: "Авто",
+  pillNearlyFull: "{window}: використано {pct}%. Якщо цьому чату треба більше, перемкни його на інший акаунт нижче.",
+  workspaceTitle: "Акаунт для нових чатів тут",
+  workspaceHint: "Нові чати в цьому воркспейсі відкриваються на цьому акаунті. Відкриті чати лишаються на своїх.",
+  workspaceAuto: "Авто (зараз {label})",
+  workspaceAutoNone: "Авто",
+  workspaceDefault: "За замовчуванням ({label})",
+  workspaceFolder: "Вхід теки кожного чату",
+  workspaceFailed: "Не вдалося задати акаунт воркспейсу.",
+  refuseAskedUnknown: "Цей чат запущено з PASEO_CLAUDE_ACCOUNT={label}, а такого акаунта Claude немає. Вкажи id акаунта (назву його теки: work для ~/.claude-work) або @auto.",
+  refuseAskedMissingDir: "Цей чат запущено з PASEO_CLAUDE_ACCOUNT={label}, але теки цього акаунта більше немає. Увійди в нього знову на екрані акаунтів або запусти чат без цієї змінної.",
+  refuseAutoNone: "Цей чат не має акаунта Claude: Авто не знайшов жодного акаунта зі входом, і в {dir} теж ніхто не увійшов. Увійди на екрані акаунтів.",
+  attachTitle: "Акаунт Claude",
+  attachPickerTitle: "Почати цей чат на",
+  attachSearch: "Пошук акаунтів",
+  attachAutoTitle: "Обрати за лімітами",
+  attachAccountText: "Цей чат запущено на акаунті Claude {label}.",
+  attachAutoText: "Цей чат запущено на акаунті Claude з найпридатнішим лімітом.",
 };
 
 /** Maps a locale tag to a catalogue entry: `ru-RU`, `ru` and `ru_RU.UTF-8` all give `ru`. */

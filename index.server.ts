@@ -16,14 +16,30 @@ import { detectLocale, t } from "./shared/i18n.ts";
 import { uniqueId } from "./shared/naming.ts";
 import { canonical } from "./shared/path.ts";
 import { PROVIDERS, type ProviderId, isProviderId, providerForHome } from "./shared/providers.ts";
-import { type Registry, accountById, registerAccount, removeAccounts, setDefault, unhideHomes } from "./shared/registry.ts";
+import { type Candidate, pickAuto } from "./shared/auto.ts";
+import {
+  AUTO,
+  type Account,
+  type Registry,
+  accountById,
+  bindWorkspace,
+  forgetWorkspace,
+  registerAccount,
+  removeAccounts,
+  setDefault,
+  unhideHomes,
+  workspaceAccount,
+} from "./shared/registry.ts";
 import { preferences } from "./shared/settings.ts";
 import { pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
+import { setWorkspaceRpc, workspaceStateRpc } from "./shared/workspace.ts";
+import { ACCOUNT_RESOURCE, accountSearchRpc } from "./shared/attach.ts";
+import { loginLabel } from "./shared/identity.ts";
 import { createApiKeyCheck } from "./server/apiKey.ts";
 import { chatRpc, describeAccounts, describeRpc, readChat } from "./server/capabilities.ts";
 import { checkDefault, defaultOptions } from "./server/defaults.ts";
 import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } from "./server/discover.ts";
-import { directoryExists, sessionEnv } from "./server/hook.ts";
+import { ACCOUNT_VAR, directoryExists, sessionEnv, withAskedAccount } from "./server/hook.ts";
 import { openLogin } from "./server/login.ts";
 import { migrateFromTokens } from "./server/migrate.ts";
 import { createOverview, createUsageRow } from "./server/overview.ts";
@@ -32,8 +48,9 @@ import { createProfiles } from "./server/profile.ts";
 import { createSessionDirs } from "./server/sessionDir.ts";
 import { createProjects } from "./server/projects.ts";
 import { reloadAgent } from "./server/reload.ts";
+import { createSerial } from "./server/serial.ts";
 import { STATE_FILE, loadRegistry, readRegistry, writeRegistry } from "./server/store.ts";
-import { switchAccount } from "./server/switchAccount.ts";
+import { switchAccount, switchTarget } from "./server/switchAccount.ts";
 import { listChats, switchAll } from "./server/switchAll.ts";
 import { createUsage } from "./server/usage.ts";
 
@@ -69,6 +86,62 @@ export default function contribute(server: PluginServerContext) {
   }
 
   const persist = (registry: Registry) => writeRegistry(registry, STATE_FILE, log);
+  /** How the pill and the workspace popover read each login and its allowance, so the two never
+   *  disagree. */
+  const loginDeps = {
+    identify: (home: string) => discovery.identify(home),
+    authorised: (home: string) => usage.authorised(home),
+    usageFor: async (home: string, manual: boolean) => {
+      const cached = usage.cached(home);
+      if (cached !== null && !usage.stale(home)) return cached;
+      return usage.measure(home, defaultDir(), manual);
+    },
+    profile: (home: string) => profiles.identityOf(home, defaultDir()),
+  };
+  /** One queue for the read-modify-writes this feature adds, so chats starting together and a
+   *  workspace being set or archived never write over each other. */
+  const serial = createSerial();
+  const update = (change: (registry: Registry) => Registry) =>
+    serial(async () => {
+      const next = change(await readRegistry());
+      await persist(next);
+      return next;
+    });
+
+  /** One account as an automatic pick sees it: null when its directory is gone or it is logged
+   *  out, else what is known of its allowance. */
+  async function candidateFor(account: Account, meterable: boolean): Promise<Candidate | null> {
+    if (!(await directoryExists(account.home))) return null;
+    const loggedIn = await discovery.identify(account.home).then((who) => who.loggedIn, () => false);
+    if (!loggedIn) return null;
+    const cached = usage.cached(account.home);
+    const reading = !meterable
+      ? null
+      : cached !== null && !usage.stale(account.home)
+        ? cached
+        : await usage.measure(account.home, defaultDir(), false).catch(() => null);
+    const known = reading !== null && reading.state === "ok";
+    return { account, known, fiveHour: known ? reading.fiveHour : null, sevenDay: known ? reading.sevenDay : null };
+  }
+
+  /** The account an automatic pick chooses for a new chat of `provider` now. Each account gets
+   *  `AUTO_READ_MS` in all (login check and allowance reading); one that takes longer counts as
+   *  unknown, so a slow Keychain, `claude` or network never holds a new chat back for longer. */
+  async function autoPick(provider: string): Promise<Account | null> {
+    if (!isProviderId(provider) || !PROVIDERS[provider].supported) return null;
+    const registry = await readRegistry();
+    const meterable = PROVIDERS[provider].meterable;
+    const candidates = await Promise.all(
+      registry.accounts
+        .filter((account) => account.provider === provider)
+        .map((account) => {
+          const unknown: Candidate = { account, known: false, fiveHour: null, sevenDay: null };
+          const gaveUp = new Promise<Candidate>((resolve) => setTimeout(() => resolve(unknown), AUTO_READ_MS).unref?.());
+          return Promise.race([candidateFor(account, meterable).catch(() => null), gaveUp]);
+        }),
+    );
+    return pickAuto(candidates.filter((candidate): candidate is Candidate => candidate !== null));
+  }
 
   /** The language the daemon writes messages in: the plugin's setting, else the daemon's. */
   async function serverStrings() {
@@ -158,7 +231,7 @@ export default function contribute(server: PluginServerContext) {
       return { ...nothing, code: "already-registered" as const, error: "" };
     }
     await mkdir(home, { recursive: true });
-    const id = uniqueId(displayName(home), new Set(registry.accounts.map((a) => a.id)));
+    const id = uniqueId(displayName(home), new Set([AUTO, ...registry.accounts.map((a) => a.id)]));
     const account = { id, label: input.label === "" ? id : input.label, provider: input.provider, home };
     await persist(registerAccount(registry, account));
     if (!input.login) return { account: id, terminal: "", code: "" as const, error: "" };
@@ -232,16 +305,9 @@ export default function contribute(server: PluginServerContext) {
     const state = await pillStateFor(
       { agentId: input.agentId, cwd: input.cwd, manual: input.manual },
       {
+        ...loginDeps,
         readRegistry,
         projectHome: () => homeOfChat(input.agentId, input.cwd),
-        identify: (home) => discovery.identify(home),
-        authorised: (home) => usage.authorised(home),
-        usageFor: async (home, manual) => {
-          const cached = usage.cached(home);
-          if (cached !== null && !usage.stale(home)) return cached;
-          return usage.measure(home, defaultDir(), manual);
-        },
-        profile: (home) => profiles.identityOf(home, defaultDir()),
       },
     );
     return { ...state, overridingVar: override };
@@ -252,6 +318,7 @@ export default function contribute(server: PluginServerContext) {
     const options = defaultOptions(registry, input.provider);
     const checked = await checkDefault(registry, input.provider, { directoryExists });
     if (checked.state === "unset") return { account: "", problem: "" as const, label: "", options };
+    if (checked.state === "auto") return { account: AUTO, problem: "" as const, label: "", options };
     if (checked.state === "ok") return { account: checked.account.id, problem: "" as const, label: checked.account.label, options };
     return { account: checked.id, problem: checked.problem, label: checked.label, options };
   });
@@ -292,11 +359,123 @@ export default function contribute(server: PluginServerContext) {
         if ((await discovery.identify(dir)).loggedIn) return { dir, loggedIn: true };
         return { dir, loggedIn: (await discovery.identify(dir, true)).loggedIn };
       },
+      autoPick,
+      update,
+      // Bounded like a pick: an answer that takes longer is "could not be told".
+      loggedIn: (home) =>
+        Promise.race([
+          discovery.identify(home).then((who) => who.loggedIn, () => null),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), AUTO_READ_MS).unref?.()),
+        ]),
       refusalText: (code: RefusalCode, values) => refusalText(strings, code, values),
       log,
     });
     return env === undefined ? undefined : { ...input.request, env };
   });
 
+  /** Every login with its allowance, as the pill lists them, with no chat behind them: `current`
+   *  is false throughout, for the caller to set. */
+  async function loginRows(registry: Registry, manual: boolean) {
+    const state = await pillStateFor(
+      { agentId: "", cwd: "", manual },
+      { ...loginDeps, readRegistry: async () => registry, projectHome: async () => null },
+    );
+    return state.accounts;
+  }
+
+  // The composer's "Claude account" attachment: Auto, then every logged-in Claude login.
+  server.handle(accountSearchRpc, async (input) => {
+    const strings = await serverStrings();
+    const query = input.query.trim().toLowerCase();
+    const rows = (await loginRows(await readRegistry(), false)).filter((row) => row.provider === "claude" && row.loggedIn);
+    const items = [
+      {
+        id: AUTO,
+        identifier: strings.workspaceAutoNone,
+        title: strings.attachAutoTitle,
+        url: USAGE_URL,
+        text: strings.attachAutoText,
+        resourceType: ACCOUNT_RESOURCE,
+      },
+      ...rows.map((row) => {
+        const name = loginLabel({ email: row.email, orgName: row.orgName, plan: "" }, row.label);
+        const used = [row.fiveHour, row.sevenDay].map((bar) => (bar === null ? "–" : `${Math.round(bar.utilization)}%`));
+        return {
+          id: row.switchTo,
+          identifier: row.label,
+          title: name,
+          subtitle: `${strings.fiveHourUsage} ${used[0]} · ${strings.sevenDayUsage} ${used[1]}`,
+          url: USAGE_URL,
+          // The label rather than the login: this text goes into the chat's prompt.
+          text: strings.attachAccountText.replace("{label}", row.label),
+          resourceType: ACCOUNT_RESOURCE,
+        };
+      }),
+    ];
+    const matching = query === "" ? items : items.filter((item) => `${item.identifier} ${item.title}`.toLowerCase().includes(query));
+    return { items: matching };
+  });
+
+  // A new workspace's first chat: its "Claude account" attachment becomes its environment.
+  server.before("workspace.create", ({ request }) => {
+    const next = withAskedAccount(request);
+    if (next !== undefined) log(`accounts: a new workspace's first chat asks for ${next.agent?.env?.[ACCOUNT_VAR] ?? ""}`);
+    return next;
+  });
+
+  server.handle(workspaceStateRpc, async (input) => {
+    const registry = await readRegistry();
+    const own = workspaceAccount(registry, input.workspaceId, input.provider);
+    const checked = await checkDefault(registry, input.provider, { directoryExists });
+    const next =
+      checked.state === "auto"
+        ? { source: "auto" as const, account: (await autoPick(input.provider))?.id ?? "" }
+        : checked.state === "ok"
+          ? { source: "default" as const, account: checked.account.id }
+          : checked.state === "broken"
+            ? { source: "default" as const, account: checked.id }
+            : { source: "folder" as const, account: "" };
+    const accounts = (await loginRows(registry, input.manual))
+      .filter((row) => row.provider === input.provider)
+      .map((row) => ({ ...row, current: own !== null && row.accountIds.includes(own.id) }));
+    return { account: own?.id ?? "", next, accounts };
+  });
+
+  // Only decides where chats opened in the workspace from now on land; no binding is touched.
+  server.handle(setWorkspaceRpc, async (input) => {
+    const read = await loadRegistry();
+    if (read.state === "unreadable") return { code: "registry-unreadable" as const };
+    if (input.account === "") {
+      await update((registry) => bindWorkspace(registry, { workspaceId: input.workspaceId, provider: input.provider, account: null }));
+      return { code: "" as const };
+    }
+    // The same refusals as a switch, so a workspace never names an account a chat cannot open on.
+    const checked = await switchTarget(read.registry, input.account, {
+      exists: directoryExists,
+      identify: (home) => discovery.identify(home),
+    });
+    if ("code" in checked) return { code: checked.code };
+    if (checked.target.provider !== input.provider) return { code: "unsupported-provider" as const };
+    // Written on a fresh read: the login check above can take a second, and a chat may have
+    // been bound meanwhile.
+    await update((registry) =>
+      bindWorkspace(registry, { workspaceId: input.workspaceId, provider: input.provider, account: checked.target.id }),
+    );
+    return { code: "" as const };
+  });
+
+  // An archived workspace takes no new chats, so its accounts would only pile up.
+  server.on("workspace.archived", async ({ workspace }) => {
+    const read = await loadRegistry();
+    if (read.state === "unreadable" || read.registry.workspaces?.[workspace.id] === undefined) return;
+    await update((registry) => forgetWorkspace(registry, workspace.id));
+  });
+
   return () => {};
 }
+
+/** Where a "Claude account" attachment links to: the subscription's own usage page. */
+const USAGE_URL = "https://claude.ai/settings/usage";
+
+/** How long an automatic pick waits on one account before treating its allowance as unknown. */
+const AUTO_READ_MS = 3_000;

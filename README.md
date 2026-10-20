@@ -13,9 +13,17 @@ composer: the session restarts on that account and the conversation carries on.
   every workspace onto it and makes it the default: chats opened later start on it too. Idle chats restart on it now, closed ones when they next open; a chat in the middle of
   a turn is left alone rather than cut off.
 - **Default for new chats.** Settings → Plugins → Claude Accounts picks the account every new chat
-  starts on; existing chats keep theirs. A new chat is not started when that account cannot be
-  used (removed, or its folder is gone), or when no default is set and the chat's own folder has no
+  starts on, or **Auto**, which picks one by its allowance as each chat opens (see below);
+  existing chats keep theirs. A new chat is not started when the default account cannot be used
+  (removed, or its folder is gone), or when no default is set and the chat's own folder has no
   login: Paseo shows what to choose instead of an auth error.
+- **Per workspace.** The **Users** button in a workspace's header chooses the account its new
+  chats open on, so every chat of one task runs on one account. Under Auto, the first chat in a
+  workspace chooses it for the rest. A workspace account that cannot be used (folder gone,
+  logged out) is passed over. "Move all chats here" clears every workspace's account.
+- **On the new-workspace screen**, where there is no workspace header yet: **+** in the composer →
+  **Claude account** starts the first chat on the account you pick (or on Auto's pick), and the
+  new workspace keeps it.
 
 <p>
   <img src="assets/pill.png" alt="The account pill and its popover above a chat composer" width="400">
@@ -81,6 +89,32 @@ switched are left alone.
 If the restart fails, the choice is rolled back, so the pill never shows an account the chat is not
 actually running on.
 
+**Which account a new chat opens on.** A new chat is placed once, before Claude Code starts, so
+it never has to be switched (and restarted) on its first turn. In order:
+
+1. `PASEO_CLAUDE_ACCOUNT` in the chat's environment: an account id (its folder name, `work` for
+   `~/.claude-work`), e.g. `paseo run --env PASEO_CLAUDE_ACCOUNT=work …`. An id that cannot be
+   used refuses the chat. Codex chats ignore it.
+2. The workspace's account, from its header button, from a **Claude account** attachment on a new
+   workspace's first chat (which the plugin turns into `PASEO_CLAUDE_ACCOUNT`), or from the first
+   automatic pick in it.
+   `PASEO_CLAUDE_ACCOUNT=@auto` asks for an automatic pick, which also follows this.
+3. The default: an account, or Auto.
+4. The chat's own folder's login.
+
+**Auto** reads each logged-in account's 5-hour and weekly allowance (the cached reading, or a new
+one; an account that takes more than three seconds to check counts as unknown) and picks, among
+accounts with less than 95% used in both windows, the one whose week resets soonest: what is left
+of it is lost at the reset. Equal resets go to the emptier 5-hour window. Accounts whose allowance
+could not be read come next, then accounts whose 5-hour window is 90% used or more (they would stop
+the task within minutes), then full ones, the one that has room again soonest first, so a chat
+still opens when every account is full. Chats started together in one workspace land on one
+account. From 90% used in either window, the pill's popover warns; whether to move the chat is up
+to you.
+
+Paseo does not hand a plugin an agent's labels before its session starts, so a label cannot
+choose the account; the environment variable can.
+
 **Usage meters** come from the same endpoint Claude Code uses, called with each config directory's
 own Claude Code credentials from the Keychain. Claude Code only refreshes those credentials while
 it runs in that directory, so for a directory nobody uses they expire within hours; when that
@@ -112,6 +146,7 @@ In Paseo's settings, under **Accounts**:
 
 - **Language**: English, Русский, Українська, or the same as Paseo
 - **Pill above chats**: turn the composer pill off everywhere
+- **Default account for new chats**: an account, **Auto**, or not set
 
 ## From ChatGPT
 

@@ -12,6 +12,10 @@ import {
   resolveAccount,
   defaultAccount,
   setDefault,
+  bindWorkspace,
+  forgetWorkspace,
+  workspaceAccount,
+  AUTO,
   type Registry,
 } from "./registry.ts";
 
@@ -200,4 +204,40 @@ test("setting a default leaves every binding alone, and clearing it removes only
   assert.deepEqual(set.agents, { a1: "work" });
   assert.deepEqual(setDefault(set, "claude", null).defaults, { codex: "cdx" });
   assert.deepEqual(base.defaults, { codex: "cdx" }, "the input is not mutated");
+});
+
+test("a workspace account is per provider, and clearing the last one drops the workspace", () => {
+  let r = bindWorkspace(registry(), { workspaceId: "wks_1", provider: "claude", account: "work" });
+  assert.equal(workspaceAccount(r, "wks_1", "claude")?.id, "work");
+  assert.equal(workspaceAccount(r, "wks_1", "codex"), null);
+  assert.equal(workspaceAccount(r, "wks_2", "claude"), null);
+  r = bindWorkspace(r, { workspaceId: "wks_1", provider: "claude", account: null });
+  assert.deepEqual(r.workspaces, {});
+});
+
+test("a workspace account that names a gone account, or another provider's, resolves to null", () => {
+  const r = { ...registry(), workspaces: { wks_1: { claude: "gone" }, wks_2: { codex: "work" } } };
+  assert.equal(workspaceAccount(r, "wks_1", "claude"), null);
+  assert.equal(workspaceAccount(r, "wks_2", "codex"), null);
+});
+
+test("forgetting a workspace drops its accounts and leaves the others", () => {
+  const r = { ...registry(), workspaces: { wks_1: { claude: "work" }, wks_2: { claude: "default" } } };
+  assert.deepEqual(forgetWorkspace(r, "wks_1").workspaces, { wks_2: { claude: "default" } });
+  assert.equal(forgetWorkspace(r, "wks_9"), r, "an unknown workspace changes nothing");
+});
+
+test("removing an account drops it from every workspace", () => {
+  const r = { ...registry(), workspaces: { wks_1: { claude: "work" }, wks_2: { claude: "default" } } };
+  const result = removeAccounts(r, ["work"]);
+  assert.ok(result.ok);
+  assert.deepEqual(result.registry.workspaces, { wks_2: { claude: "default" } });
+});
+
+test("workspace accounts and an automatic default survive a round trip through the state file", () => {
+  const r = { ...setDefault(registry(), "claude", AUTO), workspaces: { wks_1: { claude: "work" } } };
+  const parsed = parseRegistry(JSON.parse(JSON.stringify(r)));
+  assert.deepEqual(parsed?.workspaces, { wks_1: { claude: "work" } });
+  assert.equal(parsed?.defaults?.claude, AUTO);
+  assert.equal(defaultAccount(r, "claude"), null, "the automatic default is not an account");
 });

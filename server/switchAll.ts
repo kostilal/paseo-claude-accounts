@@ -1,5 +1,5 @@
 import type { PaseoApi } from "./paseo.ts";
-import { type Registry, applyBinding } from "../shared/registry.ts";
+import { type Registry, applyBinding, unpinWorkspaces } from "../shared/registry.ts";
 import type { SwitchCode } from "../shared/switch.ts";
 import type { ReloadCode } from "./reload.ts";
 import { type SwitchDeps, switchTarget } from "./switchAccount.ts";
@@ -64,7 +64,9 @@ export async function listChats(paseo: PaseoApi): Promise<Chat[]> {
  * A closed chat (not archived, just not running) only needs its binding; the session-open
  * hook applies it when the chat opens again. A chat whose restart fails gets its previous
  * binding back, so the pill never names an account it is not on. The account also becomes
- * the provider's default, which the hook gives every chat that opens without a binding.
+ * the provider's default, which the hook gives every chat that opens without a binding, and
+ * every workspace's account for the provider is cleared, so no workspace keeps its new chats
+ * elsewhere.
  */
 export async function switchAll(accountId: string, deps: SwitchAllDeps): Promise<SwitchAllResult> {
   const none = { moved: 0, restarted: 0, failed: 0, skipped: 0, error: "" };
@@ -76,7 +78,11 @@ export async function switchAll(accountId: string, deps: SwitchAllDeps): Promise
   const mine = (await deps.chats()).filter((chat) => chat.provider === target.provider);
   const chats = mine.filter((chat) => !BUSY.has(chat.status));
   const skipped = mine.length - chats.length;
-  let bound: Registry = { ...registry, defaults: { ...registry.defaults, [target.provider]: target.id } };
+  // Workspace accounts are cleared too, so new chats everywhere land here as well.
+  let bound: Registry = unpinWorkspaces(
+    { ...registry, defaults: { ...registry.defaults, [target.provider]: target.id } },
+    target.provider,
+  );
   for (const chat of chats) bound = applyBinding(bound, { agentId: chat.id, account: target.id });
   await deps.writeRegistry(bound);
   if (chats.length === 0) return { code: "", ...none, skipped };

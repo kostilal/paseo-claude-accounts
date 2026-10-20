@@ -54,3 +54,10 @@ test("the settings offer every account of the provider, by label", () => {
   assert.deepEqual(defaultOptions(registry(), "codex").map((option) => option.id), ["cdx"]);
   assert.deepEqual(defaultOptions(registry(), "copilot"), []);
 });
+
+test("an automatic default is its own state, with nothing read", async () => {
+  let read = false;
+  const answer = await checkDefault(registry({ claude: "@auto" }), "claude", deps({ directoryExists: async () => ((read = true), true) }));
+  assert.deepEqual(answer, { state: "auto" });
+  assert.equal(read, false);
+});

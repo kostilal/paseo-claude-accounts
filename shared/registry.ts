@@ -22,9 +22,19 @@ export interface Registry {
    *  directory and its login stay, so discovery would offer it straight back without this. */
   hidden?: string[];
   /** provider -> account id, set by "Move all chats here". A chat with no binding of its own
-   *  is bound to it when its session opens, so new chats follow the last move. */
+   *  is bound to it when its session opens, so new chats follow the last move. `AUTO` instead
+   *  of an id picks the account by its allowance each time; see shared/auto.ts. */
   defaults?: Record<string, string>;
+  /** workspaceId -> provider -> account id. A new chat in the workspace opens on it, so every
+   *  chat of one task runs on one account. Set by the workspace's header button, and by the
+   *  first chat an automatic pick placed in the workspace. */
+  workspaces?: Record<string, Record<string, string>>;
 }
+
+/** The default that is not an account: pick one by its allowance when each chat opens. Account
+ *  ids come from directory names, so a new account is never given this one (see `connectAccount` in
+ *  index.server.ts). */
+export const AUTO = "@auto";
 
 export function emptyRegistry(): Registry {
   return { version: 2, accounts: [], agents: {}, hidden: [] };
@@ -45,6 +55,7 @@ const stored = z.object({
   agents: z.record(z.string(), z.string()).default({}),
   hidden: z.array(z.string()).default([]),
   defaults: z.record(z.string(), z.string()).optional(),
+  workspaces: z.record(z.string(), z.record(z.string(), z.string())).optional(),
 });
 
 /**
@@ -83,6 +94,50 @@ export function setDefault(registry: Registry, provider: string, account: string
   if (account === null) delete defaults[provider];
   else defaults[provider] = account;
   return { ...registry, defaults };
+}
+
+/** The account new chats of `provider` in this workspace open on, or null when none is set (or
+ *  it is gone, or belongs to another provider). */
+export function workspaceAccount(registry: Registry, workspaceId: string, provider: string): Account | null {
+  const id = registry.workspaces?.[workspaceId]?.[provider];
+  if (id === undefined) return null;
+  const account = accountById(registry, id);
+  return account?.provider === provider ? account : null;
+}
+
+/** A workspace's account for one provider set, or cleared with `account: null`. Chats already
+ *  open in it keep theirs. */
+export function bindWorkspace(
+  registry: Registry,
+  request: { workspaceId: string; provider: string; account: string | null },
+): Registry {
+  const workspaces = { ...registry.workspaces };
+  const own = { ...workspaces[request.workspaceId] };
+  if (request.account === null) delete own[request.provider];
+  else own[request.provider] = request.account;
+  if (Object.keys(own).length === 0) delete workspaces[request.workspaceId];
+  else workspaces[request.workspaceId] = own;
+  return { ...registry, workspaces };
+}
+
+/** Every workspace's account for `provider` cleared, so new chats follow the default again. */
+export function unpinWorkspaces(registry: Registry, provider: string): Registry {
+  if (registry.workspaces === undefined) return registry;
+  const workspaces: Record<string, Record<string, string>> = {};
+  for (const [workspaceId, byProvider] of Object.entries(registry.workspaces)) {
+    const own = { ...byProvider };
+    delete own[provider];
+    if (Object.keys(own).length > 0) workspaces[workspaceId] = own;
+  }
+  return { ...registry, workspaces };
+}
+
+/** Forgets a workspace's accounts, for when the workspace is archived. */
+export function forgetWorkspace(registry: Registry, workspaceId: string): Registry {
+  if (registry.workspaces?.[workspaceId] === undefined) return registry;
+  const workspaces = { ...registry.workspaces };
+  delete workspaces[workspaceId];
+  return { ...registry, workspaces };
 }
 
 /** One agent binding set, or cleared with `account: null`. */
@@ -151,11 +206,25 @@ export function removeAccounts(registry: Registry, targets: readonly string[]): 
       ...(registry.defaults === undefined
         ? {}
         : { defaults: Object.fromEntries(Object.entries(registry.defaults).filter(([, id]) => !removed.has(id))) }),
+      ...(registry.workspaces === undefined ? {} : { workspaces: withoutAccounts(registry.workspaces, removed) }),
       hidden: [...before, ...added],
     },
     removed: [...removed].sort(),
     hidden: added,
   };
+}
+
+/** Workspace accounts minus the removed ones, dropping workspaces left with none. */
+function withoutAccounts(
+  workspaces: Record<string, Record<string, string>>,
+  removed: ReadonlySet<string>,
+): Record<string, Record<string, string>> {
+  const kept: Record<string, Record<string, string>> = {};
+  for (const [workspaceId, byProvider] of Object.entries(workspaces)) {
+    const own = Object.fromEntries(Object.entries(byProvider).filter(([, id]) => !removed.has(id)));
+    if (Object.keys(own).length > 0) kept[workspaceId] = own;
+  }
+  return kept;
 }
 
 /** Lets hidden directories back into discovery. Accounts stay removed; the directory comes

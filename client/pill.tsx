@@ -14,6 +14,7 @@ import { fetchUsage } from "../shared/accounts.ts";
 import { loginLabel } from "../shared/identity.ts";
 import { type Strings, t } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
+import { nearlyFull } from "../shared/auto.ts";
 import { type PillAccount, type SwitchCode, pillStateRpc, switchAccountRpc } from "../shared/switch.ts";
 import { currentOf, exhaustedResetIn, hasSpare, pillFigure, tightestOf, usageLine, weekLine } from "./format.ts";
 import { createPillRegistry, trackClaudeAgents } from "./pill-registry.ts";
@@ -22,7 +23,7 @@ import { typeScale } from "./typography.ts";
 import { Banner, Button, EmptyState, Skeleton, meterTone } from "./ui.tsx";
 
 /** A row is named by its login, not by the config directory holding it. */
-function loginTitle(account: PillAccount, strings: Strings): string {
+export function loginTitle(account: PillAccount, strings: Strings): string {
   return loginLabel(
     { email: account.email, orgName: account.orgName, plan: "" },
     account.label !== "" ? account.label : strings.notLoggedIn,
@@ -65,6 +66,22 @@ function switchNotice(
   if (failure.code === "reload-failed") return { text: failure.error, tone: "bad" };
   const text = messageFor(failure.code, strings);
   return text === "" ? null : { text, tone: "bad" };
+}
+
+/** The warning for a chat whose account is close to a limit, naming the fuller window; null
+ *  when neither window is. The chat is not moved: whether it needs more room is the person's
+ *  call. */
+function nearlyFullText(account: PillAccount | null, strings: Strings): string | null {
+  if (account === null) return null;
+  const windows = [
+    { name: strings.fiveHourUsage, bar: account.fiveHour },
+    { name: strings.sevenDayUsage, bar: account.sevenDay },
+  ].filter((window) => nearlyFull(window.bar));
+  const fullest = windows.sort((a, b) => b.bar!.utilization - a.bar!.utilization)[0];
+  if (fullest === undefined) return null;
+  return strings.pillNearlyFull
+    .replace("{window}", fullest.name)
+    .replace("{pct}", String(Math.round(fullest.bar!.utilization)));
 }
 
 const pillKey = (agentId: string) => ["accounts", "pill", agentId];
@@ -196,6 +213,7 @@ export function AccountPopover(props: PluginButtonContentProps) {
 
   const rows = data === undefined ? [] : data.accounts.filter((account) => account.loggedIn);
   const ordered = [...rows.filter((row) => row.current), ...rows.filter((row) => !row.current)];
+  const warning = nearlyFullText(rows.find((row) => row.current) ?? null, strings);
   // The current account's usage could not be read: offer a manual reveal under the list.
   const unread = rows.find((row) => row.current && (row.usage === "unauthorised" || row.usage === "error")) ?? null;
 
@@ -279,6 +297,7 @@ export function AccountPopover(props: PluginButtonContentProps) {
               })}
             </View>
           )}
+          {warning !== null && <Banner theme={theme} tone="warn" text={warning} />}
           {unread !== null && (
             <Button
               theme={theme}
