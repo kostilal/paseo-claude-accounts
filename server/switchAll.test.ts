@@ -174,7 +174,7 @@ test("restarts run a few at a time, not all at once", async () => {
 test("listChats follows every page and leaves archived chats out", async () => {
   const pages = [
     {
-      entries: [{ agent: { id: "a", provider: "claude", status: "idle", archivedAt: null } }],
+      entries: [{ agent: { id: "a", provider: "claude", status: "idle", archivedAt: null, persistence: { sessionId: "s-a" } } }],
       pageInfo: { hasMore: true, nextCursor: "p2", prevCursor: null },
     },
     {
@@ -195,8 +195,25 @@ test("listChats follows every page and leaves archived chats out", async () => {
     },
   } as unknown as PaseoApi;
   assert.deepEqual(await listChats(paseo), [
-    { id: "a", provider: "claude", status: "idle" },
-    { id: "b", provider: "codex", status: "closed" },
+    { id: "a", provider: "claude", status: "idle", sessionId: "s-a", createdAt: null },
+    { id: "b", provider: "codex", status: "closed", sessionId: null, createdAt: null },
   ]);
   assert.deepEqual(cursors, [undefined, "p2"]);
+});
+
+test("an idle chat whose first turn was never saved is skipped, not restarted into a broken session", async () => {
+  const log: string[] = [];
+  const now = new Date().toISOString();
+  const chats: Chat[] = [
+    { id: "saved", provider: "claude", status: "idle", sessionId: "s-saved", createdAt: now },
+    { id: "unsaved", provider: "claude", status: "idle", sessionId: "s-unsaved", createdAt: now },
+    { id: "fresh", provider: "claude", status: "idle", sessionId: null, createdAt: now },
+    // Long past its first turn: moved even though no transcript was found for it.
+    { id: "old", provider: "claude", status: "idle", sessionId: "s-old", createdAt: "2026-01-01T00:00:00Z" },
+  ];
+  const fake = deps(log, { chats: async () => chats, hasTranscript: async (id) => id === "s-saved" });
+  const result = await switchAll("personal", fake.deps);
+  assert.equal(result.skipped, 1);
+  assert.deepEqual(log.slice(1).sort(), ["reload fresh", "reload old", "reload saved"]);
+  assert.equal(fake.stored().agents.unsaved, undefined, "its binding is not touched");
 });

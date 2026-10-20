@@ -133,3 +133,19 @@ test("a reload that failed keeps its code and its message", async () => {
   assert.equal(result.code, "reload-failed");
   assert.equal(result.error, "boom");
 });
+
+test("a chat whose first turn is not saved yet is refused before anything is touched", async () => {
+  const log: string[] = [];
+  const asked: string[] = [];
+  const result = await switchAccount(input, deps(log, { unsaved: async (agentId) => (asked.push(agentId), true) }));
+  assert.equal(result.code, "first-turn");
+  assert.deepEqual(log, [], "neither written nor restarted");
+  assert.deepEqual(asked, ["ag1"]);
+});
+
+test("a chat whose session is saved switches as usual", async () => {
+  const log: string[] = [];
+  const result = await switchAccount(input, deps(log, { unsaved: async () => false }));
+  assert.equal(result.code, "");
+  assert.deepEqual(log, ["write", "reload"]);
+});

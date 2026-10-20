@@ -11,6 +11,9 @@ export const switchCode = z.enum([
   /** The target directory exists but nobody is logged into it, so the hook would run the
    *  session on an empty login. Refused before anything is written; the remedy is to log in. */
   "not-logged-in",
+  /** The chat's first turn has not been saved yet: a restart now would lose the conversation.
+   *  Refused before anything is written; the remedy is to wait for the first reply. */
+  "first-turn",
   "paseo-not-found",
   "reload-failed",
 ]);
@@ -47,7 +50,8 @@ export const switchAllRpc = defineRpc({
     restarted: z.number().default(0),
     /** Open chats whose restart failed; they keep their previous account. */
     failed: z.number().default(0),
-    /** Chats in the middle of a turn, left on their account rather than cut off. */
+    /** Chats in the middle of a turn, or whose first turn is not saved yet, left on their
+     *  account rather than cut off or broken. */
     skipped: z.number().default(0),
     /** The first failed restart's message; empty otherwise. */
     error: z.string().default(""),

@@ -125,7 +125,12 @@ switch is reported as not done. Adding, deleting and logging in are not offered.
 
 - **macOS only.** A session reads its login from the Keychain by directory, which the
   `CLAUDE_SECURESTORAGE_CONFIG_DIR` variable redirects; the switch is built on that.
-- **A switch restarts the session**, which ends a turn in progress.
+- **A switch restarts the session**, which ends a turn in progress. It is refused until the chat's
+  first turn is saved: Claude Code writes the transcript a few seconds into that turn, and a
+  restart before then leaves Paseo resuming a session that does not exist ("No conversation
+  found"). Only chats created in the last ten minutes are checked, so a wrong refusal lasts ten
+  minutes at most; a chat left empty for longer before its first message is not protected.
+  "Move all chats here" skips such chats.
 - **A switched chat shares the account's rotating login.** It is the same login the directory uses,
   refreshed in place, so chats never fight over a copied token — but logging that account out (or
   renaming its folder) logs out every chat on it until it logs in again.

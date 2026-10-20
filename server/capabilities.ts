@@ -169,7 +169,7 @@ export const OPERATIONS: AccountsOperation[] = [
     contract: switchAccountRpc,
     title: "Move a chat to another account",
     description:
-      "Restart one chat on another account; the conversation carries on and other chats keep theirs. A turn in progress is cut off. A code says it was refused: not-logged-in (nobody is logged in to that account), unknown-account, missing-directory, or reload-failed (the chat kept its account).",
+      "Restart one chat on another account; the conversation carries on and other chats keep theirs. A turn in progress is cut off. A code says it was refused: not-logged-in (nobody is logged in to that account), unknown-account, missing-directory, first-turn (the chat's first turn is not saved yet; wait for its first reply), or reload-failed (the chat kept its account).",
     input: z.object({ agentId, account }),
     fields: ["code", "error"],
     risk: "disruptive",

@@ -33,6 +33,7 @@ export interface Strings {
   switchMissingDirectory: string;
   switchUnsupportedProvider: string;
   switchNotLoggedIn: string;
+  switchFirstTurn: string;
   switchUnknownAccount: string;
   switchBusy: string;
   pillAgentUnknown: string;
@@ -93,7 +94,7 @@ export interface Strings {
   /** The armed button: a second press moves. */
   moveAllConfirm: string;
   moveAllRunning: string;
-  /** The outcome, joined with " · ": `{moved}`, `{skipped}` (busy chats left alone) and
+  /** The outcome, joined with " · ": `{moved}`, `{skipped}` (chats left alone: busy, or whose first turn is not saved) and
    *  `{failed}` are replaced with counts. */
   moveAllDone: string;
   moveAllBusy: string;
@@ -133,6 +134,7 @@ const en: Strings = {
   switchMissingDirectory: "That account's directory is gone",
   switchUnsupportedProvider: "That account is for a provider this plugin does not run yet",
   switchNotLoggedIn: "Nobody is logged in to that account's directory yet",
+  switchFirstTurn: "This chat's first turn is not saved yet, and restarting it now would lose the conversation. Wait for the first reply, then switch.",
   switchUnknownAccount: "That account is not in the list any more",
   switchBusy: "This will interrupt the current turn. Press again to switch anyway.",
   pillAgentUnknown: "Can't see this chat yet.",
@@ -186,7 +188,7 @@ const en: Strings = {
   moveAllConfirm: "Press again to move",
   moveAllRunning: "Moving…",
   moveAllDone: "Moved {moved}",
-  moveAllBusy: "{skipped} busy",
+  moveAllBusy: "left alone: {skipped}",
   moveAllFailed: "{failed} failed",
   moveAllError: "Could not move",
 };
@@ -223,6 +225,7 @@ const ru: Strings = {
   switchMissingDirectory: "Директории этого аккаунта больше нет",
   switchUnsupportedProvider: "Этот аккаунт для провайдера, который плагин пока не ведёт",
   switchNotLoggedIn: "В директорию этого аккаунта ещё никто не вошёл",
+  switchFirstTurn: "Первый ход этого чата ещё не сохранён, и перезапуск сейчас потеряет разговор. Дождись первого ответа, потом переключай.",
   switchUnknownAccount: "Этого аккаунта больше нет в списке",
   switchBusy: "Это прервёт текущий ход. Нажми ещё раз, чтобы всё равно переключиться.",
   pillAgentUnknown: "Пока не вижу этот чат.",
@@ -276,7 +279,7 @@ const ru: Strings = {
   moveAllConfirm: "Нажми ещё раз",
   moveAllRunning: "Перевожу…",
   moveAllDone: "Переведено: {moved}",
-  moveAllBusy: "занято: {skipped}",
+  moveAllBusy: "оставлено как есть: {skipped}",
   moveAllFailed: "ошибок: {failed}",
   moveAllError: "Не вышло",
 };
@@ -313,6 +316,7 @@ const uk: Strings = {
   switchMissingDirectory: "Директорії цього акаунта більше немає",
   switchUnsupportedProvider: "Цей акаунт для провайдера, якого плагін поки не веде",
   switchNotLoggedIn: "До директорії цього акаунта ще ніхто не увійшов",
+  switchFirstTurn: "Перший хід цього чату ще не збережено, і перезапуск зараз втратить розмову. Дочекайся першої відповіді, потім перемикай.",
   switchUnknownAccount: "Цього акаунта більше немає у списку",
   switchBusy: "Це перерве поточний хід. Натисни ще раз, щоб усе одно перемкнути.",
   pillAgentUnknown: "Поки не бачу цей чат.",
@@ -366,7 +370,7 @@ const uk: Strings = {
   moveAllConfirm: "Натисни ще раз",
   moveAllRunning: "Переводжу…",
   moveAllDone: "Переведено: {moved}",
-  moveAllBusy: "зайнято: {skipped}",
+  moveAllBusy: "залишено як є: {skipped}",
   moveAllFailed: "помилок: {failed}",
   moveAllError: "Не вдалося",
 };
