@@ -3,18 +3,25 @@ import { type Registry, applyBinding, unpinWorkspaces } from "../shared/registry
 import type { SwitchCode } from "../shared/switch.ts";
 import type { ReloadCode } from "./reload.ts";
 import { type SwitchDeps, switchTarget } from "./switchAccount.ts";
+import { unsavedSession } from "./transcript.ts";
 
 /** One chat as the switch-all needs it. */
 export interface Chat {
   id: string;
   provider: string;
   status: string;
+  /** The provider session Paseo has recorded, or null before the chat ever started. */
+  sessionId?: string | null;
+  /** When the chat was created; a chat this young may still be in its first turn. */
+  createdAt?: string | null;
 }
 
 export interface SwitchAllDeps extends Pick<SwitchDeps, "readRegistry" | "writeRegistry" | "exists" | "identify"> {
   /** Every chat that is not archived, in every workspace. */
   chats(): Promise<Chat[]>;
   reload(agentId: string): Promise<{ code: ReloadCode; error: string }>;
+  /** Whether a session's transcript is on disk (see server/transcript.ts). Absent: assumed so. */
+  hasTranscript?(sessionId: string): Promise<boolean>;
 }
 
 export interface SwitchAllResult {
@@ -25,7 +32,8 @@ export interface SwitchAllResult {
   restarted: number;
   /** Open chats whose restart failed. Their bindings were put back. */
   failed: number;
-  /** Chats in the middle of a turn, left on their account so their work is not cut off. */
+  /** Chats in the middle of a turn, or whose first turn was never saved, left on their account
+   *  so their work is not cut off or broken. */
   skipped: number;
   /** The first failed restart's message, or "". */
   error: string;
@@ -50,7 +58,7 @@ export async function listChats(paseo: PaseoApi): Promise<Chat[]> {
     const page = await paseo.agents.list({ filter: { includeArchived: false }, page: { limit: 100, cursor } });
     for (const { agent } of page.entries) {
       if (agent.archivedAt) continue;
-      chats.push({ id: agent.id, provider: agent.provider, status: agent.status });
+      chats.push({ id: agent.id, provider: agent.provider, status: agent.status, sessionId: agent.persistence?.sessionId ?? null, createdAt: agent.createdAt ?? null });
     }
     cursor = page.pageInfo.hasMore ? (page.pageInfo.nextCursor ?? undefined) : undefined;
   } while (cursor !== undefined);
@@ -76,7 +84,13 @@ export async function switchAll(accountId: string, deps: SwitchAllDeps): Promise
   const { target } = checked;
 
   const mine = (await deps.chats()).filter((chat) => chat.provider === target.provider);
-  const chats = mine.filter((chat) => !BUSY.has(chat.status));
+  const idle = mine.filter((chat) => !BUSY.has(chat.status));
+  // An idle chat whose first turn was never saved (stopped early) would break on a restart.
+  const hasTranscript = deps.hasTranscript ?? (async () => true);
+  const unsaved = await Promise.all(
+    idle.map((chat) => unsavedSession({ provider: chat.provider, sessionId: chat.sessionId ?? null, createdAt: chat.createdAt }, hasTranscript)),
+  );
+  const chats = idle.filter((_, index) => !unsaved[index]);
   const skipped = mine.length - chats.length;
   // Workspace accounts are cleared too, so new chats everywhere land here as well.
   let bound: Registry = unpinWorkspaces(

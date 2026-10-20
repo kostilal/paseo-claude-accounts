@@ -42,6 +42,8 @@ function messageFor(code: SwitchCode, strings: Strings): string {
       return strings.switchNotLoggedIn;
     case "unknown-account":
       return strings.switchUnknownAccount;
+    case "first-turn":
+      return strings.switchFirstTurn;
     case "":
     case "reload-failed":
       return "";

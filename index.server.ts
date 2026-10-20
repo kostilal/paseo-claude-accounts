@@ -51,7 +51,8 @@ import { createProjects } from "./server/projects.ts";
 import { reloadAgent } from "./server/reload.ts";
 import { createSerial } from "./server/serial.ts";
 import { STATE_FILE, loadRegistry, readRegistry, writeRegistry } from "./server/store.ts";
-import { switchAccount, switchTarget } from "./server/switchAccount.ts";
+import { switchAccount } from "./server/switchAccount.ts";
+import { transcriptExists, unsavedSession } from "./server/transcript.ts";
 import { listChats, switchAll } from "./server/switchAll.ts";
 import { createUsage } from "./server/usage.ts";
 
@@ -175,6 +176,21 @@ export default function contribute(server: PluginServerContext) {
     return [...new Set([...registry.accounts.map((account) => account.home), ...discovered])];
   }
 
+  /** Whether a session's transcript is on disk, looked for in every config directory a chat can
+   *  run in: the known ones, the daemon's own and, for one chat, the one its process runs in.
+   *  The directories are worked out once per check. Anything that fails counts as found: the
+   *  guard must never block a switch because of an error of its own. */
+  function transcriptCheck(api: PaseoApi, agentId: string | null) {
+    let homes: Promise<string[]> | null = null;
+    const homesOnce = () =>
+      (homes ??= (async () => {
+        const live = agentId === null ? null : await sessionDir(agentId);
+        const own = live?.found ? (live.configDir ?? defaultDir()) : null;
+        return [...new Set([...(await knownHomes(api)), unboundDir(), ...(own === null ? [] : [own])])];
+      })());
+    return (sessionId: string) => homesOnce().then((found) => transcriptExists(sessionId, found)).catch(() => true);
+  }
+
   const usageRowFor = createUsageRow({
     knownHomes,
     identify: (dir, refresh) => discovery.identify(dir, refresh),
@@ -280,7 +296,7 @@ export default function contribute(server: PluginServerContext) {
     }
   });
 
-  server.handle(switchAccountRpc, async (input) => {
+  server.handle(switchAccountRpc, async (input, { paseo }) => {
     const result = await switchAccount(
       { agentId: input.agentId, accountId: input.account },
       {
@@ -289,6 +305,13 @@ export default function contribute(server: PluginServerContext) {
         exists: directoryExists,
         identify: (home) => discovery.identify(home),
         reload: (agentId) => reloadAgent(agentId),
+        unsaved: async (agentId) => {
+          const found = await paseo.agents.ref(agentId).refresh().catch(() => null);
+          if (found === null) return false;
+          const { agent } = found;
+          const session = { provider: agent.provider, sessionId: agent.persistence?.sessionId ?? null, createdAt: agent.createdAt };
+          return unsavedSession(session, transcriptCheck(paseo, agentId));
+        },
       },
     );
     // The popover has closed by the time this answers; the log keeps the reason.
@@ -304,6 +327,7 @@ export default function contribute(server: PluginServerContext) {
       identify: (home) => discovery.identify(home),
       chats: () => listChats(paseo),
       reload: (agentId) => reloadAgent(agentId),
+      hasTranscript: transcriptCheck(paseo, null),
     });
     // The screen only has room for counts; the reasons go here.
     if (result.code !== "") log(`accounts: moving all chats to ${input.account} refused (${result.code})`);

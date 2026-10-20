@@ -17,6 +17,8 @@ export interface SwitchDeps {
    *  so a logged-out one is refused up front rather than opening an empty session. */
   identify(home: string): Promise<Identity>;
   reload(agentId: string): Promise<{ code: ReloadCode; error: string }>;
+  /** Whether restarting this chat now would lose it (see server/transcript.ts). Absent: never. */
+  unsaved?(agentId: string): Promise<boolean>;
 }
 
 /** The account a switch would land on, or why the session-open hook could not act on it.
@@ -47,6 +49,7 @@ export async function switchAccount(
   const registry = await deps.readRegistry();
   const checked = await switchTarget(registry, input.accountId, deps);
   if ("code" in checked) return { code: checked.code, error: "" };
+  if (await deps.unsaved?.(input.agentId)) return { code: "first-turn", error: "" };
 
   // No "already on that account" short-circuit: the binding saying so does not prove the
   // session runs on it, so a retry must always reload.
