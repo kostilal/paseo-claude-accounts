@@ -112,6 +112,24 @@ export function AccountsSettings({ theme }: PluginSurfaceProps) {
             disabled={current === null || saving}
             onValueChange={choose}
           />
+          <SettingsSelect
+            label={strings.autoPolicyLabel}
+            hint={strings.autoPolicyHint}
+            value={values.autoPolicy}
+            options={[
+              { label: strings.autoPolicyBurn, value: "burn-first" },
+              { label: strings.autoPolicyRoom, value: "most-room" },
+            ]}
+            disabled={busy}
+            onValueChange={(autoPolicy) => save({ autoPolicy })}
+          />
+          <SettingsSwitch
+            label={strings.perWorkspaceLabel}
+            hint={strings.perWorkspaceHint}
+            value={values.oneAccountPerWorkspace}
+            disabled={busy}
+            onValueChange={(oneAccountPerWorkspace) => save({ oneAccountPerWorkspace })}
+          />
         </SettingsCard>
       </SettingsSection>
       {current !== null && options.length === 0 && chosen === NONE ? (

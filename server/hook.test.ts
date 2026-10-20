@@ -541,3 +541,15 @@ test("a workspace pinned by an automatic pick is marked automatic; one pinned by
   await sessionEnv(created({ env: { PASEO_CLAUDE_ACCOUNT: "keyed" } }), asked.deps);
   assert.deepEqual(asked.stored().autoPins ?? [], []);
 });
+
+test("with one account per task off, a new chat is picked on its own and no workspace is pinned", async () => {
+  const fake = starting({ defaults: { claude: "@auto" }, workspaces: { wks_1: { claude: "keyed" } }, pick: "home" });
+  const deps = { ...fake.deps, oneAccountPerWorkspace: async () => false };
+  const env = await sessionEnv(created(), deps);
+  assert.equal(credentialOf(env), "/Users/me/.claude", "the pin is ignored");
+  assert.deepEqual(fake.picks, ["claude"]);
+  assert.deepEqual(fake.stored().workspaces, {}, "pins left from before are dropped");
+  assert.deepEqual(fake.stored().autoPins, []);
+  await sessionEnv(created({ agentId: "second" }), deps);
+  assert.deepEqual(fake.stored().workspaces, {}, "and none are made");
+});

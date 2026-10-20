@@ -31,9 +31,9 @@ import {
   unpinAutomatic,
   workspaceAccount,
 } from "./shared/registry.ts";
-import { preferences } from "./shared/settings.ts";
+import { defaultPreferences, preferences } from "./shared/settings.ts";
 import { pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
-import { setWorkspaceRpc, workspaceStateRpc } from "./shared/workspace.ts";
+import { workspaceStateRpc } from "./shared/workspace.ts";
 import { ACCOUNT_RESOURCE, accountSearchRpc } from "./shared/attach.ts";
 import { loginLabel } from "./shared/identity.ts";
 import { createApiKeyCheck } from "./server/apiKey.ts";
@@ -141,13 +141,19 @@ export default function contribute(server: PluginServerContext) {
           return Promise.race([candidateFor(account, meterable).catch(() => null), gaveUp]);
         }),
     );
-    return pickAuto(candidates.filter((candidate): candidate is Candidate => candidate !== null));
+    const policy = (await prefs()).autoPolicy;
+    return pickAuto(candidates.filter((candidate): candidate is Candidate => candidate !== null), policy);
+  }
+
+  /** The plugin's preferences, or their defaults while they cannot be read. */
+  async function prefs() {
+    const state = await settings.read().catch(() => null);
+    return state !== null && state.status === "ready" ? state.values : defaultPreferences;
   }
 
   /** The language the daemon writes messages in: the plugin's setting, else the daemon's. */
   async function serverStrings() {
-    const state = await settings.read().catch(() => null);
-    const language = state !== null && state.status === "ready" ? state.values.language : "auto";
+    const language = (await prefs()).language;
     return t(language === "auto" ? detectLocale() : language);
   }
 
@@ -199,7 +205,11 @@ export default function contribute(server: PluginServerContext) {
 
   server.handle(listAccounts, async (input, { paseo }) => {
     const [overview, override] = await Promise.all([overviewFor(paseo, input.refresh, input.force), overridingVar(paseo)]);
-    return { ...overview, overridingVar: override };
+    // Under Auto there is no default account to badge; the one Auto would pick now is shown.
+    const registry = await readRegistry();
+    const now = registry.defaults?.claude === AUTO ? ((await autoPick("claude"))?.id ?? "") : "";
+    const accounts = overview.accounts.map((row) => ({ ...row, autoNow: now !== "" && row.accountIds.includes(now) }));
+    return { ...overview, accounts, overridingVar: override };
   });
 
   server.handle(fetchUsage, async (input, { paseo }) => {
@@ -365,6 +375,7 @@ export default function contribute(server: PluginServerContext) {
       },
       autoPick,
       update,
+      oneAccountPerWorkspace: async () => (await prefs()).oneAccountPerWorkspace,
       // Bounded like a pick: an answer that takes longer is "could not be told".
       loggedIn: (home) =>
         Promise.race([
@@ -443,29 +454,6 @@ export default function contribute(server: PluginServerContext) {
       .filter((row) => row.provider === input.provider)
       .map((row) => ({ ...row, current: own !== null && row.accountIds.includes(own.id) }));
     return { account: own?.id ?? "", default: registry.defaults?.[input.provider] ?? "", next, accounts };
-  });
-
-  // Only decides where chats opened in the workspace from now on land; no binding is touched.
-  server.handle(setWorkspaceRpc, async (input) => {
-    const read = await loadRegistry();
-    if (read.state === "unreadable") return { code: "registry-unreadable" as const };
-    if (input.account === "") {
-      await update((registry) => bindWorkspace(registry, { workspaceId: input.workspaceId, provider: input.provider, account: null }));
-      return { code: "" as const };
-    }
-    // The same refusals as a switch, so a workspace never names an account a chat cannot open on.
-    const checked = await switchTarget(read.registry, input.account, {
-      exists: directoryExists,
-      identify: (home) => discovery.identify(home),
-    });
-    if ("code" in checked) return { code: checked.code };
-    if (checked.target.provider !== input.provider) return { code: "unsupported-provider" as const };
-    // Written on a fresh read: the login check above can take a second, and a chat may have
-    // been bound meanwhile.
-    await update((registry) =>
-      bindWorkspace(registry, { workspaceId: input.workspaceId, provider: input.provider, account: checked.target.id }),
-    );
-    return { code: "" as const };
   });
 
   // An archived workspace takes no new chats, so its accounts would only pile up.

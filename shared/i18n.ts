@@ -110,12 +110,18 @@ export interface Strings {
   /** The row that gives the choice back to the default. `{label}` is what it picks now. */
   workspaceAuto: string;
   workspaceAutoNone: string;
-  workspaceDefault: string;
-  workspaceFolder: string;
-  workspaceFailed: string;
-  /** The popover's second section: the default for every new chat. */
-  workspaceEverywhere: string;
-  workspaceEverywhereHint: string;
+  /** The pill's popover: whose account this chat runs on, and what a press does. */
+  pillTitle: string;
+  pillHint: string;
+  /** Settings. */
+  autoPolicyLabel: string;
+  autoPolicyHint: string;
+  autoPolicyBurn: string;
+  autoPolicyRoom: string;
+  perWorkspaceLabel: string;
+  perWorkspaceHint: string;
+  /** The Accounts screen's badge, under Auto, on the account Auto would pick now. */
+  autoNowBadge: string;
   /** `{label}` is the id `PASEO_CLAUDE_ACCOUNT` names, or the account's label. */
   refuseAskedUnknown: string;
   refuseAskedMissingDir: string;
@@ -220,15 +226,10 @@ const en: Strings = {
   moveAllError: "Could not move",
   defaultSettingAuto: "Auto",
   pillNearlyFull: "{window}: {pct}% used. If this chat needs more room, switch it to another account below.",
-  workspaceTitle: "Account for new chats here",
-  workspaceHint: "New chats in this workspace open on this account. Open chats keep theirs.",
+  workspaceTitle: "Account for new chats",
+  workspaceHint: "Every new chat opens on this. Open chats keep theirs; the pill above a chat switches that chat.",
   workspaceAuto: "Auto (now {label})",
   workspaceAutoNone: "Auto",
-  workspaceDefault: "Default ({label})",
-  workspaceFolder: "Each chat's folder login",
-  workspaceFailed: "Could not set this workspace's account.",
-  workspaceEverywhere: "For all new chats",
-  workspaceEverywhereHint: "The default. Workspaces Auto placed follow it; ones you chose above keep theirs.",
   refuseAskedUnknown: "This chat was started with PASEO_CLAUDE_ACCOUNT={label}, and there is no such Claude account. Use the account's id (its folder name: work for ~/.claude-work), or @auto.",
   refuseAskedMissingDir: "This chat was started with PASEO_CLAUDE_ACCOUNT={label}, but that account's folder is gone. Log in to it again on the Accounts screen, or start the chat without it.",
   refuseAutoNone: "This chat has no Claude account: Auto found no logged-in account to pick, and nobody is logged in to {dir}. Log in on the Accounts screen.",
@@ -238,6 +239,15 @@ const en: Strings = {
   attachAutoTitle: "Pick by allowance",
   attachAccountText: "This chat was started on the Claude account {label}.",
   attachAutoText: "This chat was started on the Claude account with the most suitable allowance.",
+  pillTitle: "This chat's account",
+  pillHint: "Picking another restarts this chat on it; the conversation carries on.",
+  autoPolicyLabel: "How Auto picks",
+  autoPolicyHint: "Among accounts with room. Accounts nearly out of their 5 hours, or full, come last.",
+  autoPolicyBurn: "Week that resets soonest first",
+  autoPolicyRoom: "Most room left first",
+  perWorkspaceLabel: "One account per task",
+  perWorkspaceHint: "Auto's first pick in a workspace holds for all its new chats, until the default changes. Off: each new chat is picked on its own.",
+  autoNowBadge: "Auto · now",
 };
 
 const ru: Strings = {
@@ -330,15 +340,10 @@ const ru: Strings = {
   moveAllError: "Не вышло",
   defaultSettingAuto: "Авто",
   pillNearlyFull: "{window}: использовано {pct}%. Если этому чату нужно больше, переключи его на другой аккаунт ниже.",
-  workspaceTitle: "Аккаунт для новых чатов здесь",
-  workspaceHint: "Новые чаты в этом воркспейсе открываются на этом аккаунте. Открытые чаты остаются на своих.",
+  workspaceTitle: "Аккаунт для новых чатов",
+  workspaceHint: "Каждый новый чат открывается на нём. Открытые чаты остаются на своих; пилка над чатом переключает этот чат.",
   workspaceAuto: "Авто (сейчас {label})",
   workspaceAutoNone: "Авто",
-  workspaceDefault: "По умолчанию ({label})",
-  workspaceFolder: "Вход папки каждого чата",
-  workspaceFailed: "Не удалось задать аккаунт воркспейса.",
-  workspaceEverywhere: "Для всех новых чатов",
-  workspaceEverywhereHint: "По умолчанию. Воркспейсы, которые выбрал Авто, перейдут на него; выбранные вами выше останутся.",
   refuseAskedUnknown: "Этот чат запущен с PASEO_CLAUDE_ACCOUNT={label}, а такого аккаунта Claude нет. Укажи id аккаунта (имя его папки: work для ~/.claude-work) или @auto.",
   refuseAskedMissingDir: "Этот чат запущен с PASEO_CLAUDE_ACCOUNT={label}, но папки этого аккаунта больше нет. Войди в него снова на экране аккаунтов или запусти чат без этой переменной.",
   refuseAutoNone: "У этого чата нет аккаунта Claude: Авто не нашёл ни одного аккаунта со входом, и в {dir} тоже никто не вошёл. Войди на экране аккаунтов.",
@@ -348,6 +353,15 @@ const ru: Strings = {
   attachAutoTitle: "Выбрать по лимитам",
   attachAccountText: "Этот чат запущен на аккаунте Claude {label}.",
   attachAutoText: "Этот чат запущен на аккаунте Claude с самым подходящим лимитом.",
+  pillTitle: "Аккаунт этого чата",
+  pillHint: "Выбор другого перезапустит этот чат на нём; разговор продолжится.",
+  autoPolicyLabel: "Как выбирает Авто",
+  autoPolicyHint: "Среди аккаунтов с запасом. Почти исчерпавшие 5 часов и полные идут последними.",
+  autoPolicyBurn: "Сначала тот, у кого неделя сбросится раньше",
+  autoPolicyRoom: "Сначала тот, у кого больше запаса",
+  perWorkspaceLabel: "Один аккаунт на задачу",
+  perWorkspaceHint: "Первый выбор Авто в воркспейсе действует на все его новые чаты, пока не сменится аккаунт по умолчанию. Выключено: каждый новый чат выбирается отдельно.",
+  autoNowBadge: "Авто · сейчас",
 };
 
 const uk: Strings = {
@@ -440,15 +454,10 @@ const uk: Strings = {
   moveAllError: "Не вдалося",
   defaultSettingAuto: "Авто",
   pillNearlyFull: "{window}: використано {pct}%. Якщо цьому чату треба більше, перемкни його на інший акаунт нижче.",
-  workspaceTitle: "Акаунт для нових чатів тут",
-  workspaceHint: "Нові чати в цьому воркспейсі відкриваються на цьому акаунті. Відкриті чати лишаються на своїх.",
+  workspaceTitle: "Акаунт для нових чатів",
+  workspaceHint: "Кожен новий чат відкривається на ньому. Відкриті чати лишаються на своїх; пілка над чатом перемикає цей чат.",
   workspaceAuto: "Авто (зараз {label})",
   workspaceAutoNone: "Авто",
-  workspaceDefault: "За замовчуванням ({label})",
-  workspaceFolder: "Вхід теки кожного чату",
-  workspaceFailed: "Не вдалося задати акаунт воркспейсу.",
-  workspaceEverywhere: "Для всіх нових чатів",
-  workspaceEverywhereHint: "За замовчуванням. Воркспейси, які обрав Авто, перейдуть на нього; обрані вами вище лишаться.",
   refuseAskedUnknown: "Цей чат запущено з PASEO_CLAUDE_ACCOUNT={label}, а такого акаунта Claude немає. Вкажи id акаунта (назву його теки: work для ~/.claude-work) або @auto.",
   refuseAskedMissingDir: "Цей чат запущено з PASEO_CLAUDE_ACCOUNT={label}, але теки цього акаунта більше немає. Увійди в нього знову на екрані акаунтів або запусти чат без цієї змінної.",
   refuseAutoNone: "Цей чат не має акаунта Claude: Авто не знайшов жодного акаунта зі входом, і в {dir} теж ніхто не увійшов. Увійди на екрані акаунтів.",
@@ -458,6 +467,15 @@ const uk: Strings = {
   attachAutoTitle: "Обрати за лімітами",
   attachAccountText: "Цей чат запущено на акаунті Claude {label}.",
   attachAutoText: "Цей чат запущено на акаунті Claude з найпридатнішим лімітом.",
+  pillTitle: "Акаунт цього чату",
+  pillHint: "Вибір іншого перезапустить цей чат на ньому; розмова продовжиться.",
+  autoPolicyLabel: "Як обирає Авто",
+  autoPolicyHint: "Серед акаунтів із запасом. Майже вичерпані за 5 годин і повні йдуть останніми.",
+  autoPolicyBurn: "Спершу той, у кого тиждень скинеться раніше",
+  autoPolicyRoom: "Спершу той, у кого більше запасу",
+  perWorkspaceLabel: "Один акаунт на задачу",
+  perWorkspaceHint: "Перший вибір Авто у воркспейсі діє на всі його нові чати, доки не зміниться акаунт за замовчуванням. Вимкнено: кожен новий чат обирається окремо.",
+  autoNowBadge: "Авто · зараз",
 };
 
 /** Maps a locale tag to a catalogue entry: `ru-RU`, `ru` and `ru_RU.UTF-8` all give `ru`. */

@@ -109,3 +109,17 @@ test("a nearly spent account still comes before full ones, and after unread ones
   assert.equal(picked([full, hotter, hot]), "hot", "the emptier five-hour window, not the sooner week");
   assert.equal(picked([hot, unknown("blind")]), "blind");
 });
+
+test("most-room picks the account with the most left in its fuller window, whatever its week", () => {
+  const soon = candidate("soon", [10, "2026-10-20T15:00:00Z"], [80, "2026-10-21T00:00:00Z"]);
+  const roomy = candidate("roomy", [30, "2026-10-20T15:00:00Z"], [20, "2026-10-26T00:00:00Z"]);
+  assert.equal(pickAuto([soon, roomy], "burn-first")?.id, "soon");
+  assert.equal(pickAuto([soon, roomy], "most-room")?.id, "roomy");
+});
+
+test("most-room still passes over a nearly spent five-hour window and full accounts", () => {
+  const hot = candidate("hot", [WARN_AT + 2, "2026-10-20T15:00:00Z"], [0, "2026-10-26T00:00:00Z"]);
+  const busy = candidate("busy", [50, "2026-10-20T15:00:00Z"], [60, "2026-10-26T00:00:00Z"]);
+  const full = candidate("full", [100, "2026-10-20T15:00:00Z"], [0, "2026-10-26T00:00:00Z"]);
+  assert.equal(pickAuto([hot, full, busy], "most-room")?.id, "busy");
+});

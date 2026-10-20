@@ -48,6 +48,9 @@ export interface HookDeps {
   /** Whether a config directory is logged in; null when it could not be told. Absent: assumed
    *  logged in. A workspace account that is not is passed over. */
   loggedIn?(home: string): Promise<boolean | null>;
+  /** Whether Auto's first pick in a workspace holds for the workspace's later chats (the
+   *  "one account per task" setting). Absent: yes. */
+  oneAccountPerWorkspace?(): Promise<boolean>;
   /** The message a refused chat shows. */
   refusalText?(code: RefusalCode, values: { label?: string; dir?: string }): string;
   log?(line: string): void;
@@ -141,9 +144,19 @@ export async function sessionEnv(
 async function newChatEnv(
   registry: Registry,
   provider: string,
-  request: SessionRequest,
+  workspaceRequest: SessionRequest,
   deps: HookDeps,
 ): Promise<Record<string, string> | undefined> {
+  // With one account per workspace off, the chat is placed as if it had no workspace: nothing
+  // is read from or written to the workspace accounts. Any left from when it was on are
+  // dropped, so turning it on again starts clean.
+  const perWorkspace = (await deps.oneAccountPerWorkspace?.()) ?? true;
+  const request = perWorkspace ? workspaceRequest : { ...workspaceRequest, workspaceId: null };
+  if (!perWorkspace && Object.keys(registry.workspaces ?? {}).length > 0) {
+    const clear = (current: Registry): Registry => ({ ...current, workspaces: {}, autoPins: [] });
+    if (deps.update !== undefined) await deps.update(clear);
+    else await deps.writeRegistry(clear(await deps.readRegistry()));
+  }
   const refuse = (code: RefusalCode, values: { label?: string; dir?: string }) =>
     new SessionRefused(code, deps.refusalText?.(code, values) ?? `no account for this chat (${code})`);
   const log = deps.log ?? ((line: string) => console.error(line));

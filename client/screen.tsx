@@ -210,6 +210,7 @@ function LoginCard({
         </View>
         <View style={{ flexShrink: 0, flexDirection: "row", gap: 6 }}>
           {row.isDefault && <Chip theme={theme} label={strings.defaultAccount} />}
+          {row.autoNow && <Chip theme={theme} label={strings.autoNowBadge} />}
         </View>
       </View>
 

@@ -41,7 +41,8 @@ const byId = (a: Candidate, b: Candidate) => a.account.id.localeCompare(b.accoun
  * The account a new chat should open on, or null when there is none to choose from.
  *
  * Accounts with room in both windows (and a five-hour window under `WARN_AT`) come first, and
- * among them the one whose weekly allowance resets soonest: what is left of it is lost at the
+ * among them, under `burn-first`, the one whose weekly allowance resets soonest (under
+ * `most-room`, the one with the most left in its fuller window): what is left of it is lost at the
  * reset, while the others keep theirs. Equal resets go to the emptier five-hour window. Accounts
  * whose allowance could not be read come next, then accounts whose five-hour window is nearly
  * spent (the emptiest first), then full ones, the one that has room again soonest first. A full account is still
@@ -50,17 +51,23 @@ const byId = (a: Candidate, b: Candidate) => a.account.id.localeCompare(b.accoun
  *
  * Deterministic for the same readings, so chats started together land on one account.
  */
-export function pickAuto(candidates: readonly Candidate[]): Account | null {
+/** `burn-first`: the account whose week resets soonest, so what would be lost at the reset is
+ *  used first. `most-room`: the account with the most left in its fuller window. */
+export type AutoPolicy = "burn-first" | "most-room";
+
+/** The higher of an account's two windows, 0 when neither is known. */
+const fuller = (c: Candidate) => Math.max(c.fiveHour?.utilization ?? 0, c.sevenDay?.utilization ?? 0);
+
+export function pickAuto(candidates: readonly Candidate[], policy: AutoPolicy = "burn-first"): Account | null {
   const open = candidates.filter((c) => c.known && !isFull(c.fiveHour) && !isFull(c.sevenDay));
   // A nearly spent five-hour window would stop the chat (and the workspace it pins) within
   // minutes, whatever its week; it waits behind every account with real room.
   const roomy = open.filter((c) => !nearlyFull(c.fiveHour));
   if (roomy.length > 0) {
-    const sorted = [...roomy].sort(
-      (a, b) =>
-        resetAt(a.sevenDay) - resetAt(b.sevenDay) ||
-        (a.fiveHour?.utilization ?? 0) - (b.fiveHour?.utilization ?? 0) ||
-        byId(a, b),
+    const sorted = [...roomy].sort((a, b) =>
+      policy === "most-room"
+        ? fuller(a) - fuller(b) || resetAt(a.sevenDay) - resetAt(b.sevenDay) || byId(a, b)
+        : resetAt(a.sevenDay) - resetAt(b.sevenDay) || (a.fiveHour?.utilization ?? 0) - (b.fiveHour?.utilization ?? 0) || byId(a, b),
     );
     return sorted[0]!.account;
   }

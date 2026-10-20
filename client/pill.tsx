@@ -219,6 +219,8 @@ export function AccountPopover(props: PluginButtonContentProps) {
 
   return (
     <View style={{ padding: layout.compact ? 10 : 12, gap: 8, minWidth: layout.compact ? 280 : 340, maxWidth: 420 }}>
+      <Text style={{ ...typeScale.body, fontWeight: "600", color: theme.colors.foreground }}>{strings.pillTitle}</Text>
+      <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }}>{strings.pillHint}</Text>
       {cwd === null ? (
         <Banner theme={theme} tone="info" text={strings.pillAgentUnknown} />
       ) : data !== undefined ? (

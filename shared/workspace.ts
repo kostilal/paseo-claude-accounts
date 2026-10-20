@@ -32,19 +32,4 @@ export const workspaceStateRpc = defineRpc({
   }),
 });
 
-export const setWorkspaceRpc = defineRpc({
-  name: "accounts.set-workspace",
-  input: z.object({
-    workspaceId: z.string(),
-    provider: z.string().default("claude"),
-    /** The account new chats in the workspace open on; "" gives the choice back to the
-     *  default. Chats already open keep theirs. */
-    account: z.string(),
-  }),
-  output: z.object({
-    /** A refusal of the account, before anything was written. */
-    code: z.union([switchCode, z.literal("registry-unreadable")]).default(""),
-  }),
-});
-
 export type WorkspaceState = z.output<typeof workspaceStateRpc.output>;

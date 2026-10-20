@@ -17,15 +17,12 @@ composer: the session restarts on that account and the conversation carries on.
   existing chats keep theirs. A new chat is not started when the default account cannot be used
   (removed, or its folder is gone), or when no default is set and the chat's own folder has no
   login: Paseo shows what to choose instead of an auth error.
-- **Per workspace.** The **Users** button in a workspace's header chooses the account its new
-  chats open on, so every chat of one task runs on one account. Under Auto, the first chat in a
-  workspace chooses it for the rest. The same popover's second section, **For all new chats**,
-  sets the default: workspaces Auto placed follow it, workspaces you chose an account for keep
-  theirs. A workspace account that cannot be used (folder gone,
-  logged out) is passed over. "Move all chats here" clears every workspace's account.
+- **Default in the header.** The **Users** button in a workspace's header picks the account
+  every new chat opens on: **Auto**, or one account. The pill above a chat switches that chat.
+- **One account per task** (Settings, off by default): Auto's first pick in a workspace holds for
+  all its new chats, until the default changes. Off, every new chat is picked on its own.
 - **On the new-workspace screen**, where there is no workspace header yet: **+** in the composer →
-  **Claude account** starts the first chat on the account you pick (or on Auto's pick), and the
-  new workspace keeps it.
+  **Claude account** starts the first chat on the account you pick (or on Auto's pick).
 
 <p>
   <img src="assets/pill.png" alt="The account pill and its popover above a chat composer" width="400">
@@ -97,10 +94,9 @@ it never has to be switched (and restarted) on its first turn. In order:
 1. `PASEO_CLAUDE_ACCOUNT` in the chat's environment: an account id (its folder name, `work` for
    `~/.claude-work`), e.g. `paseo run --env PASEO_CLAUDE_ACCOUNT=work …`. An id that cannot be
    used refuses the chat. Codex chats ignore it.
-2. The workspace's account, from its header button, from a **Claude account** attachment on a new
-   workspace's first chat (which the plugin turns into `PASEO_CLAUDE_ACCOUNT`), or from the first
-   automatic pick in it.
-   `PASEO_CLAUDE_ACCOUNT=@auto` asks for an automatic pick, which also follows this.
+2. With **One account per task** on: the account Auto first picked in the workspace.
+   `PASEO_CLAUDE_ACCOUNT=@auto` asks for an automatic pick. A **Claude account** attachment on a
+   new workspace's first chat is turned into this variable.
 3. The default: an account, or Auto.
 4. The chat's own folder's login.
 
@@ -149,6 +145,8 @@ In Paseo's settings, under **Accounts**:
 - **Language**: English, Русский, Українська, or the same as Paseo
 - **Pill above chats**: turn the composer pill off everywhere
 - **Default account for new chats**: an account, **Auto**, or not set
+- **How Auto picks**: the week that resets soonest first, or the most room left first
+- **One account per task**: off by default
 
 ## From ChatGPT
 
