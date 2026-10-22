@@ -16,7 +16,7 @@ import { type Strings, t } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { nearlyFull } from "../shared/auto.ts";
 import { type PillAccount, type SwitchCode, pillStateRpc, switchAccountRpc } from "../shared/switch.ts";
-import { currentOf, exhaustedResetIn, hasSpare, pillFigure, tightestOf, usageLine, weekLine } from "./format.ts";
+import { currentOf, exhaustedResetIn, hasSpare, pillFigure, pillPercent, tightestOf, usageLine, weekLine } from "./format.ts";
 import { createPillRegistry, trackClaudeAgents } from "./pill-registry.ts";
 import { AccountRing } from "./ring.tsx";
 import { typeScale } from "./typography.ts";
@@ -89,9 +89,10 @@ function nearlyFullText(account: PillAccount | null, strings: Strings): string |
 const pillKey = (agentId: string) => ["accounts", "pill", agentId];
 
 /**
- * The pill icon: a ring of the current account's tightest window, plus a green dot when the
- * allowance is (nearly) gone and another account could take over. The label beside it is
- * host-owned, so the figure is pushed through `registration.update()`.
+ * The pill icon: a ring of the current account's 5-hour window (full once either window is
+ * exhausted), plus a green dot when the allowance is (nearly) gone and another account could
+ * take over. The label beside it is host-owned, so the figure is pushed through
+ * `registration.update()`.
  */
 function AccountPillIcon(
   props: PluginButtonIconProps & { registration: { current: PluginButtonRegistration | null } },
@@ -118,15 +119,18 @@ function AccountPillIcon(
     registration.current?.update({ label, visible: showPill });
   }, [label, showPill, registration]);
 
+  // The green dot still weighs the week: it says another account has room, and a nearly
+  // spent week is as good a reason to move as a nearly spent 5 hours.
   const tightest = current === null ? null : tightestOf(current.fiveHour, current.sevenDay);
   const exhausted = current !== null && exhaustedResetIn(current.fiveHour, current.sevenDay, Date.now()) !== null;
   const spare = data !== undefined && (exhausted || (tightest !== null && tightest >= 90)) && hasSpare(data);
+  const ringPercent = current === null ? null : pillPercent(current);
   // The host clips anything larger than the icon slot.
   const ringSize = size;
 
   return (
     <View style={{ width: ringSize, height: ringSize }}>
-      <AccountRing theme={theme} size={ringSize} provider={current?.provider ?? "claude"} tightest={tightest} />
+      <AccountRing theme={theme} size={ringSize} provider={current?.provider ?? "claude"} tightest={ringPercent} />
       {spare && (
         <View
           style={{

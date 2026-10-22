@@ -39,14 +39,29 @@ export function formatWait(ms: number, strings: Strings): string {
   return `${Math.round(hours / 24)} ${strings.unitDay}`;
 }
 
-/** The figure beside the pill's ring: the tightest window as a percentage, the time until
- *  reset once exhausted, or "" when usage is unknown (never a reassuring 0%). */
+/**
+ * What the pill's ring fills to: the 5-hour window, the one that moves while you work. The
+ * week has its own line in the list; a ring stuck at the week's 82% says nothing about the
+ * next hour. Once either window is exhausted the ring is full, because the account is
+ * unusable whichever one ran out. Null when the 5-hour window is unknown.
+ */
+export function pillPercent(current: PillAccount): number | null {
+  // Utilization itself, not exhaustedResetIn: that one skips a window whose reset time is
+  // unknown, and an exhausted week without one would read as a roomy 5 hours.
+  const exhausted = [current.fiveHour, current.sevenDay].some((bar) => bar !== null && bar.utilization >= EXHAUSTED_AT);
+  if (exhausted) return 100;
+  return current.fiveHour?.utilization ?? null;
+}
+
+/** The figure beside the pill's ring: the 5-hour window as a percentage, the time until
+ *  reset once either window is exhausted, or "" when usage is unknown (never a reassuring
+ *  0%). */
 export function pillFigure(current: PillAccount | null, now: number, strings: Strings): string {
   if (current === null) return strings.pillNoAccount;
   const wait = exhaustedResetIn(current.fiveHour, current.sevenDay, now);
   if (wait !== null) return formatWait(wait, strings);
-  const tightest = tightestOf(current.fiveHour, current.sevenDay);
-  return tightest === null ? "" : `${Math.round(tightest)}%`;
+  const percent = pillPercent(current);
+  return percent === null ? "" : `${Math.round(percent)}%`;
 }
 
 export function providerName(provider: string): string {
