@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { t } from "../shared/i18n.ts";
 import type { PillAccount, PillState } from "../shared/switch.ts";
-import { exhaustedResetIn, formatWait, hasSpare, pillFigure, tightestOf, usageLine, weekLine } from "./format.ts";
+import { exhaustedResetIn, formatWait, hasSpare, pillFigure, pillPercent, tightestOf, usageLine, weekLine } from "./format.ts";
 
 const strings = t("ru");
 const now = Date.parse("2026-09-16T12:00:00Z");
@@ -45,14 +45,33 @@ test("a wait is shown in the coarsest unit that still says something", () => {
   assert.equal(formatWait(10_000, strings), "1 мин");
 });
 
-test("the pill figure is a percentage until the wall, then the wait, and a dash when unread", () => {
-  assert.equal(pillFigure(account(), now, strings), "62%");
+test("the pill figure is the 5-hour window until a wall, then the wait, and empty when unread", () => {
+  // 5 hours at 18%, the week at 62%: the pill says 18%, not the fuller week.
+  assert.equal(pillFigure(account(), now, strings), "18%");
   assert.equal(
     pillFigure(account({ fiveHour: { utilization: 100, resetsAt: "2026-09-16T12:47:00Z" } }), now, strings),
     "47 мин",
   );
   assert.equal(pillFigure(account({ fiveHour: null, sevenDay: null }), now, strings), "");
   assert.equal(pillFigure(null, now, strings), strings.pillNoAccount);
+});
+
+test("an exhausted week still shows the wait, not a roomy 5-hour figure", () => {
+  const weekGone = account({ sevenDay: { utilization: 100, resetsAt: "2026-09-16T12:47:00Z" } });
+  assert.equal(pillFigure(weekGone, now, strings), "47 мин");
+  assert.equal(pillPercent(weekGone), 100);
+});
+
+test("an exhausted week with no reset time still fills the ring, never a roomy 5 hours", () => {
+  const weekGone = account({ sevenDay: { utilization: 100, resetsAt: "" } });
+  assert.equal(pillPercent(weekGone), 100);
+  assert.equal(pillFigure(weekGone, now, strings), "100%");
+});
+
+test("the pill ring follows the 5-hour window, and is empty when that window is unknown", () => {
+  assert.equal(pillPercent(account()), 18);
+  assert.equal(pillPercent(account({ fiveHour: null })), null);
+  assert.equal(pillFigure(account({ fiveHour: null }), now, strings), "");
 });
 
 test("a row's usage line names the provider and the state", () => {

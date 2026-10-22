@@ -4,8 +4,9 @@ Run [Paseo](https://paseo.sh) chats on several Claude subscriptions, and move a 
 account while it is open. When one account hits its limit, pick another from the pill above the
 composer: the session restarts on that account and the conversation carries on.
 
-- **Composer pill.** Shows which account the chat runs on and how full its tighter usage window
-  is. Press it to see every account's 5-hour and weekly allowance and switch the chat.
+- **Composer pill.** Shows which account the chat runs on and how full its 5-hour window is (once
+  either window is exhausted, the time until it resets). Press it to see every account's 5-hour
+  and weekly allowance and switch the chat.
 - **Accounts screen.** Every Claude login on the machine, grouped by subscription, with usage bars,
   login buttons and "Add account".
 - **Per chat.** A switch moves one chat. Other chats, even in the same project, stay where they are.
