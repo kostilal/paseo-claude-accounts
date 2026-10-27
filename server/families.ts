@@ -1,0 +1,36 @@
+import type { PaseoApi } from "./paseo.ts";
+import { type ProviderFamily, familyOf, isProviderId, providerFamilies } from "../shared/providers.ts";
+
+/**
+ * The custom providers that extend Claude, read from Paseo's config and cached for a minute. A
+ * provider missing from the cache is read again (at most every few seconds), so a profile
+ * added a moment ago is found; an unreadable config reads as no profiles, never as an error.
+ */
+export function createFamilies(ttlMs = 60_000, missMs = 5_000) {
+  let cached: { at: number; value: Record<string, ProviderFamily> } | null = null;
+
+  async function all(paseo: PaseoApi, fresh = false): Promise<Record<string, ProviderFamily>> {
+    if (!fresh && cached !== null && Date.now() - cached.at < ttlMs) return cached.value;
+    let value: Record<string, ProviderFamily>;
+    try {
+      // Claude's only: the pill, the only way to see or change a chat's account, is Claude's
+      // alone, so the hook and "move all chats" leave other profiles as Paseo runs them.
+      const found = providerFamilies((await paseo.config.get()).config);
+      value = Object.fromEntries(Object.entries(found).filter(([, entry]) => entry.family === "claude"));
+    } catch {
+      value = cached?.value ?? {};
+    }
+    cached = { at: Date.now(), value };
+    return value;
+  }
+
+  return {
+    all,
+    async of(paseo: PaseoApi, provider: string): Promise<ProviderFamily | null> {
+      if (isProviderId(provider)) return familyOf(provider, {});
+      const known = familyOf(provider, await all(paseo));
+      if (known !== null || (cached !== null && Date.now() - cached.at < missMs)) return known;
+      return familyOf(provider, await all(paseo, true));
+    },
+  };
+}

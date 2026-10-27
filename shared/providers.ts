@@ -48,6 +48,42 @@ export function isProviderId(value: string): value is ProviderId {
   return Object.hasOwn(PROVIDERS, value);
 }
 
+/** What a Paseo provider id runs on: the provider whose accounts it switches between, and the
+ *  config directory its profile pins (`CLAUDE_CONFIG_DIR` in a custom provider's `env`), or
+ *  null when it pins none. */
+export interface ProviderFamily {
+  family: ProviderId;
+  configDir: string | null;
+}
+
+/**
+ * Every custom provider in Paseo's config that extends one of ours (`"extends": "claude"`),
+ * by id. Such a profile runs the same CLI, so its chats switch accounts like the provider's
+ * own; its `env` reaches the session under whatever the session-open hook sets. No `node:`
+ * imports, since this is bundled into the client.
+ */
+export function providerFamilies(config: unknown): Record<string, ProviderFamily> {
+  const providers = (config as { agents?: { providers?: unknown } } | null)?.agents?.providers;
+  const found: Record<string, ProviderFamily> = {};
+  if (typeof providers !== "object" || providers === null) return found;
+  for (const [id, raw] of Object.entries(providers as Record<string, unknown>)) {
+    if (isProviderId(id) || typeof raw !== "object" || raw === null) continue;
+    const entry = raw as { extends?: unknown; env?: unknown };
+    if (typeof entry.extends !== "string" || !isProviderId(entry.extends)) continue;
+    const env = typeof entry.env === "object" && entry.env !== null ? (entry.env as Record<string, unknown>) : {};
+    const dir = env[PROVIDERS[entry.extends].configVar];
+    found[id] = { family: entry.extends, configDir: typeof dir === "string" && dir !== "" ? dir : null };
+  }
+  return found;
+}
+
+/** What `provider` runs on: itself for one of ours, its entry in `families` for a profile
+ *  extending one, else null. */
+export function familyOf(provider: string, families: Record<string, ProviderFamily>): ProviderFamily | null {
+  if (isProviderId(provider)) return { family: provider, configDir: null };
+  return Object.hasOwn(families, provider) ? families[provider]! : null;
+}
+
 /** Which provider a config directory belongs to, from its name alone, or null. Only for
  *  unregistered directories; registered accounts carry their provider. No `node:` imports,
  *  since this is bundled into the client. */

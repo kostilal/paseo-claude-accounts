@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PROVIDERS, envFor, isProviderId, providerForHome } from "./providers.ts";
+import { PROVIDERS, envFor, familyOf, isProviderId, providerFamilies, providerForHome } from "./providers.ts";
 
 const DEFAULT_DIR = "/Users/me/.claude";
 const claudeWork = { provider: "claude" as const, home: "/Users/me/.claude-work" };
@@ -54,4 +54,39 @@ test("a directory names its own provider, and an unrelated one names none", () =
   assert.equal(providerForHome("/Users/me/Documents"), null);
   assert.equal(providerForHome("/Users/me/.claudex"), null);
   assert.equal(providerForHome("/Users/me/.claude-"), null);
+});
+
+test("a custom provider extending ours is found, with the config directory its profile pins", () => {
+  const config = {
+    agents: {
+      providers: {
+        claude: { env: { CLAUDE_CONFIG_DIR: "/ignored" } },
+        "claude-work": { extends: "claude", label: "Claude (Work)", env: { CLAUDE_CONFIG_DIR: "/Users/me/.claude-work" } },
+        "claude-fast": { extends: "claude", env: { CLAUDE_CONFIG_DIR: "" } },
+        "codex-team": { extends: "codex", env: { CODEX_HOME: "/Users/me/.codex-team" } },
+        "my-acp": { extends: "acp" },
+        opencode: { enabled: false },
+        broken: "nonsense",
+      },
+    },
+  };
+  assert.deepEqual(providerFamilies(config), {
+    "claude-work": { family: "claude", configDir: "/Users/me/.claude-work" },
+    "claude-fast": { family: "claude", configDir: null },
+    "codex-team": { family: "codex", configDir: "/Users/me/.codex-team" },
+  });
+});
+
+test("a config without providers has no profiles", () => {
+  for (const config of [null, undefined, {}, { agents: {} }, { agents: { providers: [] } }]) {
+    assert.deepEqual(providerFamilies(config), {});
+  }
+});
+
+test("familyOf: ours are themselves, profiles their entry, anything else null", () => {
+  const families = { "claude-work": { family: "claude" as const, configDir: "/w" } };
+  assert.deepEqual(familyOf("claude", families), { family: "claude", configDir: null });
+  assert.deepEqual(familyOf("claude-work", families), { family: "claude", configDir: "/w" });
+  assert.equal(familyOf("copilot", families), null);
+  assert.equal(familyOf("toString", families), null);
 });

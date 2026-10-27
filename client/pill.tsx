@@ -15,7 +15,7 @@ import { loginLabel } from "../shared/identity.ts";
 import { type Strings, t } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { nearlyFull } from "../shared/auto.ts";
-import { type PillAccount, type SwitchCode, pillStateRpc, switchAccountRpc } from "../shared/switch.ts";
+import { type PillAccount, type SwitchCode, claudeProvidersRpc, pillStateRpc, switchAccountRpc } from "../shared/switch.ts";
 import { currentOf, exhaustedResetIn, hasSpare, pillFigure, pillPercent, tightestOf, usageLine, weekLine } from "./format.ts";
 import { createPillRegistry, trackClaudeAgents } from "./pill-registry.ts";
 import { AccountRing } from "./ring.tsx";
@@ -371,5 +371,5 @@ export function contributeClient(client: PluginClientContext) {
     },
   });
 
-  return trackClaudeAgents(client.paseo.agents, registry);
+  return trackClaudeAgents(client.paseo.agents, registry, async () => (await client.rpc(claudeProvidersRpc, {})).providers);
 }

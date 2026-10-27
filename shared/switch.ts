@@ -114,3 +114,11 @@ export const pillStateRpc = defineRpc({
   }),
   output: pillState,
 });
+
+/** The provider ids whose chats get a pill: ours that switch, and the custom providers
+ *  (profiles) extending one of them. */
+export const claudeProvidersRpc = defineRpc({
+  name: "accounts.claude-providers",
+  input: z.object({}),
+  output: z.object({ providers: z.array(z.string()) }),
+});

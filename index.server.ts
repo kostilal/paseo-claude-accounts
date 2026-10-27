@@ -15,7 +15,7 @@ import { type RefusalCode, getDefaultRpc, refusalText, setDefaultRpc } from "./s
 import { detectLocale, t } from "./shared/i18n.ts";
 import { uniqueId } from "./shared/naming.ts";
 import { canonical } from "./shared/path.ts";
-import { PROVIDERS, type ProviderId, isProviderId, providerForHome } from "./shared/providers.ts";
+import { PROVIDERS, type ProviderId, familyOf, isProviderId, providerForHome } from "./shared/providers.ts";
 import { type Candidate, pickAuto } from "./shared/auto.ts";
 import {
   AUTO,
@@ -32,13 +32,14 @@ import {
   workspaceAccount,
 } from "./shared/registry.ts";
 import { defaultPreferences, preferences } from "./shared/settings.ts";
-import { pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
+import { claudeProvidersRpc, pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
 import { workspaceStateRpc } from "./shared/workspace.ts";
 import { ACCOUNT_RESOURCE, accountSearchRpc } from "./shared/attach.ts";
 import { loginLabel } from "./shared/identity.ts";
 import { createApiKeyCheck } from "./server/apiKey.ts";
 import { chatRpc, describeAccounts, describeRpc, readChat } from "./server/capabilities.ts";
 import { checkDefault, defaultOptions } from "./server/defaults.ts";
+import { createFamilies } from "./server/families.ts";
 import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } from "./server/discover.ts";
 import { ACCOUNT_VAR, directoryExists, sessionEnv, withAskedAccount } from "./server/hook.ts";
 import { openLogin } from "./server/login.ts";
@@ -67,6 +68,7 @@ export default function contribute(server: PluginServerContext) {
   const log = (line: string) => console.error(line);
   const overridingVar = createApiKeyCheck();
   const sessionDir = createSessionDirs();
+  const families = createFamilies();
 
   // One-time upgrade from 0.1.x: delete the old switching keys and drop their registry fields.
   void migrateFromTokens(STATE_FILE, log);
@@ -78,12 +80,16 @@ export default function contribute(server: PluginServerContext) {
 
   /** The config directory a chat runs in when nobody has switched it: what its running
    *  process says, else a guess from its working directory, else the daemon's default. */
-  async function homeOfChat(agentId: string, cwd: string): Promise<string> {
+  async function homeOfChat(agentId: string, cwd: string, paseo: PaseoApi): Promise<string> {
     const live = await sessionDir(agentId);
     if (live.found) {
       if (live.configDir === null) return defaultDir();
       if (await directoryExists(live.configDir)) return canonical(live.configDir);
     }
+    // A closed chat of a profile that pins its directory ("Claude (Work)") runs there.
+    const agent = await paseo.agents.ref(agentId).refresh().catch(() => null);
+    const pinned = agent === null ? null : (await families.of(paseo, agent.agent.provider))?.configDir;
+    if (typeof pinned === "string" && (await directoryExists(pinned))) return canonical(pinned);
     return (await jobDirFor(cwd)) ?? unboundDir();
   }
 
@@ -309,7 +315,8 @@ export default function contribute(server: PluginServerContext) {
           const found = await paseo.agents.ref(agentId).refresh().catch(() => null);
           if (found === null) return false;
           const { agent } = found;
-          const session = { provider: agent.provider, sessionId: agent.persistence?.sessionId ?? null, createdAt: agent.createdAt };
+          const provider = (await families.of(paseo, agent.provider))?.family ?? agent.provider;
+          const session = { provider, sessionId: agent.persistence?.sessionId ?? null, createdAt: agent.createdAt };
           return unsavedSession(session, transcriptCheck(paseo, agentId));
         },
       },
@@ -325,7 +332,10 @@ export default function contribute(server: PluginServerContext) {
       writeRegistry: persist,
       exists: directoryExists,
       identify: (home) => discovery.identify(home),
-      chats: () => listChats(paseo),
+      chats: async () => {
+        const known = await families.all(paseo);
+        return (await listChats(paseo)).map((chat) => ({ ...chat, provider: familyOf(chat.provider, known)?.family ?? chat.provider }));
+      },
       reload: (agentId) => reloadAgent(agentId),
       hasTranscript: transcriptCheck(paseo, null),
     });
@@ -342,7 +352,7 @@ export default function contribute(server: PluginServerContext) {
       {
         ...loginDeps,
         readRegistry,
-        projectHome: () => homeOfChat(input.agentId, input.cwd),
+        projectHome: () => homeOfChat(input.agentId, input.cwd, paseo),
       },
     );
     return { ...state, overridingVar: override };
@@ -382,7 +392,13 @@ export default function contribute(server: PluginServerContext) {
   server.handle(describeRpc, () => describeAccounts());
   server.handle(chatRpc, (input, { paseo }) => readChat(input.agentId, (id) => paseo.agents.ref(id).refresh()));
 
-  server.before("agent.session_open", async (input) => {
+  // The pill's chats: Claude's own and those of every profile extending it.
+  server.handle(claudeProvidersRpc, async (_input, { paseo }) => {
+    const known = await families.all(paseo, true);
+    return { providers: ["claude", ...Object.keys(known)] };
+  });
+
+  server.before("agent.session_open", async (input, { paseo }) => {
     const strings = await serverStrings();
     const env = await sessionEnv(input.request, {
       readRegistry,
@@ -399,6 +415,7 @@ export default function contribute(server: PluginServerContext) {
       },
       autoPick,
       update,
+      family: (provider) => families.of(paseo, provider),
       oneAccountPerWorkspace: async () => (await prefs()).oneAccountPerWorkspace,
       // Bounded like a pick: an answer that takes longer is "could not be told".
       loggedIn: (home) =>

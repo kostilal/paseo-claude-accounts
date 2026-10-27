@@ -69,14 +69,13 @@ export interface AgentSource<Update> {
   subscribe(handler: (update: Update) => void): () => void;
 }
 
-/** An entry's agent (`entry.agent`, or the entry itself on older hosts), if it is a Claude
- *  agent. Only Claude sessions get a pill: the session-open hook only injects Claude tokens. */
-function claudeAgent(raw: unknown): { agentId: string; workspaceId: string } | null {
+/** An entry's agent (`entry.agent`, or the entry itself on older hosts) with its provider, or
+ *  null when it has no id or no workspace to attach a pill to. */
+function agentOf(raw: unknown): { agentId: string; workspaceId: string; provider: string } | null {
   const probe = (raw ?? {}) as Record<string, unknown>;
   const agent = (probe.agent ?? probe) as Record<string, unknown>;
-  if (agent.provider !== "claude") return null;
   if (typeof agent.id !== "string" || typeof agent.workspaceId !== "string" || agent.workspaceId === "") return null;
-  return { agentId: agent.id, workspaceId: agent.workspaceId };
+  return { agentId: agent.id, workspaceId: agent.workspaceId, provider: typeof agent.provider === "string" ? agent.provider : "" };
 }
 
 /**
@@ -85,17 +84,81 @@ function claudeAgent(raw: unknown): { agentId: string; workspaceId: string } | n
  * The list must be a subscribing one: since Paseo 0.10 the daemon streams `agent_update`
  * only to clients holding a list subscription, and `agents.subscribe()` is just a local
  * listener. Without it, chats opened after load never get a pill.
+ *
+ * A Claude agent is one whose provider `providers` names: Claude's own and every custom
+ * provider (profile) extending it. They are asked alongside the list, and again once for
+ * each provider seen later that they did not name, so a profile added while the app runs gets
+ * pills too. When they cannot be asked, only Claude's own chats get one.
  */
-export function trackClaudeAgents<Update>(agents: AgentSource<Update>, registry: PillRegistry): () => void {
+export function trackClaudeAgents<Update>(
+  agents: AgentSource<Update>,
+  registry: PillRegistry,
+  providers: () => Promise<readonly string[]> = async () => ["claude"],
+): () => void {
   let stopped = false;
   let release: (() => Promise<void>) | null = null;
+  const claude = new Set<string>(["claude"]);
+  const asked = new Set<string>();
+  /** Agents reported by the update stream: the list's snapshot is older than what it says. */
+  const reported = new Set<string>();
+  /** The latest known state of each agent whose provider is not (yet) known to be Claude's.
+   *  Applied as soon as an answer names its provider, so no chat waits for its next update. */
+  const pending = new Map<string, { agentId: string; workspaceId: string; provider: string }>();
+
+  function flush() {
+    if (stopped) return;
+    for (const [agentId, agent] of pending) {
+      if (!claude.has(agent.provider)) continue;
+      pending.delete(agentId);
+      registry.apply({ kind: "upsert", agent: { id: agentId, workspaceId: agent.workspaceId } });
+    }
+  }
+
+  function ask() {
+    void providers().then(
+      (ids) => {
+        for (const id of ids) claude.add(id);
+        flush();
+      },
+      () => {},
+    );
+  }
+
+  /** Attaches a Claude agent now; holds any other until an answer names its provider, asking
+   *  once per provider not named before. */
+  function place(agent: { agentId: string; workspaceId: string; provider: string }) {
+    if (claude.has(agent.provider)) {
+      pending.delete(agent.agentId);
+      registry.apply({ kind: "upsert", agent: { id: agent.agentId, workspaceId: agent.workspaceId } });
+      return;
+    }
+    pending.set(agent.agentId, agent);
+    if (agent.provider === "" || asked.has(agent.provider)) return;
+    asked.add(agent.provider);
+    ask();
+  }
 
   const unsubscribe = agents.subscribe((raw) => {
     const update = raw as unknown as AgentUpdate & { agent?: { provider?: string } };
-    if (update.kind === "upsert" && update.agent.provider !== "claude") return;
-    registry.apply(update);
+    if (update.kind === "remove") {
+      reported.add(update.agentId);
+      pending.delete(update.agentId);
+      registry.apply(update);
+      return;
+    }
+    if (update.kind !== "upsert") return;
+    reported.add(update.agent.id);
+    const agent = agentOf(update.agent);
+    if (agent === null) {
+      pending.delete(update.agent.id);
+      return;
+    }
+    place(agent);
   });
 
+  // The providers are asked side by side with the list: a slow answer must not hold back the
+  // subscription or Claude's own chats; profiles' chats follow when it comes.
+  ask();
   void agents
     .list({ subscribe: {} })
     .then((result) => {
@@ -107,10 +170,13 @@ export function trackClaudeAgents<Update>(agents: AgentSource<Update>, registry:
       }
       const entries: Array<{ agentId: string; workspaceId: string }> = [];
       for (const entry of result.entries) {
-        const agent = claudeAgent(entry);
-        if (agent !== null) entries.push(agent);
+        const agent = agentOf(entry);
+        if (agent === null || reported.has(agent.agentId)) continue;
+        if (claude.has(agent.provider)) entries.push(agent);
+        else pending.set(agent.agentId, agent);
       }
       registry.seed(entries);
+      flush();
     })
     .catch(() => {
       // Nothing to seed; the listener still receives updates.
