@@ -44,6 +44,14 @@ function messageFor(code: SwitchCode, strings: Strings): string {
       return strings.switchUnknownAccount;
     case "first-turn":
       return strings.switchFirstTurn;
+    case "unknown-chat":
+      return strings.switchUnknownChat;
+    case "archived":
+      return strings.switchArchived;
+    case "provider-mismatch":
+      return strings.switchProviderMismatch;
+    case "not-applied":
+      return strings.switchNotApplied;
     case "":
     case "reload-failed":
       return "";

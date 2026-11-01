@@ -35,6 +35,10 @@ export interface Strings {
   switchNotLoggedIn: string;
   switchFirstTurn: string;
   switchUnknownAccount: string;
+  switchUnknownChat: string;
+  switchArchived: string;
+  switchProviderMismatch: string;
+  switchNotApplied: string;
   switchBusy: string;
   pillAgentUnknown: string;
   pillLoadFailed: string;
@@ -169,10 +173,14 @@ const en: Strings = {
   switchTo: "Switch to",
   switchPaseoMissing: "Could not find the paseo command to restart the session",
   switchMissingDirectory: "That account's directory is gone",
-  switchUnsupportedProvider: "That account is for a provider this plugin does not run yet",
+  switchUnsupportedProvider: "This plugin cannot move a chat of that provider to another account",
   switchNotLoggedIn: "Nobody is logged in to that account's directory yet",
   switchFirstTurn: "This chat's first turn is not saved yet, and restarting it now would lose the conversation. Wait for the first reply, then switch.",
   switchUnknownAccount: "That account is not in the list any more",
+  switchUnknownChat: "Paseo has no chat with this id",
+  switchArchived: "This chat is archived, and restarting it would bring it back from the archive",
+  switchProviderMismatch: "That account belongs to another provider than this chat",
+  switchNotApplied: "The chat restarted but did not take that account, so its previous one is kept",
   switchBusy: "This will interrupt the current turn. Press again to switch anyway.",
   pillAgentUnknown: "Can't see this chat yet.",
   pillLoadFailed: "Could not load accounts.",
@@ -285,10 +293,14 @@ const ru: Strings = {
   switchTo: "Переключиться на",
   switchPaseoMissing: "Не нашёл команду paseo, чтобы перезапустить сессию",
   switchMissingDirectory: "Директории этого аккаунта больше нет",
-  switchUnsupportedProvider: "Этот аккаунт для провайдера, который плагин пока не ведёт",
+  switchUnsupportedProvider: "Этот плагин не умеет переносить чат этого провайдера на другой аккаунт",
   switchNotLoggedIn: "В директорию этого аккаунта ещё никто не вошёл",
   switchFirstTurn: "Первый ход этого чата ещё не сохранён, и перезапуск сейчас потеряет разговор. Дождись первого ответа, потом переключай.",
   switchUnknownAccount: "Этого аккаунта больше нет в списке",
+  switchUnknownChat: "У Paseo нет чата с таким id",
+  switchArchived: "Этот чат в архиве, и перезапуск вернул бы его из архива",
+  switchProviderMismatch: "Этот аккаунт другого провайдера, чем чат",
+  switchNotApplied: "Чат перезапустился, но не взял этот аккаунт, поэтому остаётся прежний",
   switchBusy: "Это прервёт текущий ход. Нажми ещё раз, чтобы всё равно переключиться.",
   pillAgentUnknown: "Пока не вижу этот чат.",
   pillLoadFailed: "Не удалось загрузить аккаунты.",
@@ -401,10 +413,14 @@ const uk: Strings = {
   switchTo: "Перемкнутися на",
   switchPaseoMissing: "Не знайшов команду paseo, щоб перезапустити сесію",
   switchMissingDirectory: "Директорії цього акаунта більше немає",
-  switchUnsupportedProvider: "Цей акаунт для провайдера, якого плагін поки не веде",
+  switchUnsupportedProvider: "Цей плагін не вміє переносити чат цього провайдера на інший акаунт",
   switchNotLoggedIn: "До директорії цього акаунта ще ніхто не увійшов",
   switchFirstTurn: "Перший хід цього чату ще не збережено, і перезапуск зараз втратить розмову. Дочекайся першої відповіді, потім перемикай.",
   switchUnknownAccount: "Цього акаунта більше немає у списку",
+  switchUnknownChat: "У Paseo немає чату з таким id",
+  switchArchived: "Цей чат в архіві, і перезапуск повернув би його з архіву",
+  switchProviderMismatch: "Цей акаунт іншого провайдера, ніж чат",
+  switchNotApplied: "Чат перезапустився, але не взяв цей акаунт, тому лишається попередній",
   switchBusy: "Це перерве поточний хід. Натисни ще раз, щоб усе одно перемкнути.",
   pillAgentUnknown: "Поки не бачу цей чат.",
   pillLoadFailed: "Не вдалося завантажити акаунти.",

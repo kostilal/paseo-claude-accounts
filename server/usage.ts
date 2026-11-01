@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { claudeEnv, findClaude } from "./claude.ts";
 import { serviceName } from "../shared/service.ts";
 import { type Credential, KeychainTimeout, NO_TOKEN, readCredential } from "./keychain.ts";
+import { FRESH_FOR_MS, type UsageInfo } from "./limits.ts";
 
 const run = promisify(execFile);
 
@@ -15,7 +16,6 @@ const BACKGROUND_TIMEOUT_MS = 3_000;
 /** Bounds the request so a stalled network cannot hold up callers that await usage
  *  (binding an account among them). */
 const REQUEST_TIMEOUT_MS = 10_000;
-const FRESH_FOR_MS = 10 * 60 * 1000;
 /** How long an expired-token reading stands. Short, because it cost no request and Claude
  *  Code or a fresh login may write a new token at any time. Just under the screen's 30 s
  *  poll, so each poll reads afresh while pills polling alongside share that read. */
@@ -99,7 +99,8 @@ function blank(state: UsageState, error = ""): UsageResult {
   return { state, fiveHour: null, sevenDay: null, error };
 }
 
-interface Entry {
+interface Entry extends UsageInfo {
+  /** When the entry was written; its freshness window runs from here. */
   at: number;
   result: UsageResult;
   /** How long this reading stands; FRESH_FOR_MS when absent. */
@@ -145,12 +146,12 @@ export function createUsage(deps: UsageDeps = liveDeps) {
       if (error instanceof KeychainTimeout) {
         authorisedDirs.delete(dir);
         // Cached so background polls make one bounded attempt per freshness window.
-        cache.set(dir, { at: now(), result: blank("unauthorised"), onForce: "keep" });
+        cache.set(dir, { at: now(), measuredAt: now(), heldUntil: null, result: blank("unauthorised"), onForce: "keep" });
         return blank("unauthorised");
       }
       authorisedDirs.delete(dir);
       const result = blank("error", error instanceof Error ? error.message : String(error));
-      cache.set(dir, { at: now(), result, onForce: nothingThereYet(error) ? "retake" : "keep" });
+      cache.set(dir, { at: now(), measuredAt: now(), heldUntil: null, result, onForce: nothingThereYet(error) ? "retake" : "keep" });
       return result;
     }
 
@@ -161,7 +162,7 @@ export function createUsage(deps: UsageDeps = liveDeps) {
       const fresh = await refreshed(dir, service, timeoutMs);
       if (fresh !== null) return read(dir, fresh, service, timeoutMs);
       const result = blank("expired");
-      cache.set(dir, { at: now(), result, freshFor: EXPIRED_FRESH_FOR_MS, onForce: "retake" });
+      cache.set(dir, { at: now(), measuredAt: now(), heldUntil: null, result, freshFor: EXPIRED_FRESH_FOR_MS, onForce: "retake" });
       return result;
     }
     return read(dir, credential, service, timeoutMs);
@@ -181,10 +182,20 @@ export function createUsage(deps: UsageDeps = liveDeps) {
         onForce = "retake";
       } else if (response.status === 429) {
         // Keep the last good reading and hold it until the wait is over.
-        const previous = cache.get(dir)?.result ?? null;
+        const earlier = cache.get(dir);
+        const previous = earlier?.result ?? null;
         const wait = retryAfterMs(response);
-        const kept = previous !== null && previous.state === "ok" ? previous : blank("error", "rate limited by the usage endpoint");
-        cache.set(dir, { at: now(), result: kept, freshFor: wait, onForce: "keep" });
+        const keeping = previous !== null && previous.state === "ok";
+        const kept = keeping ? previous : blank("error", "rate limited by the usage endpoint");
+        // The numbers kept are the old ones and keep their age; only the hold is new.
+        cache.set(dir, {
+          at: now(),
+          measuredAt: keeping && earlier ? earlier.measuredAt : now(),
+          heldUntil: now() + wait,
+          result: kept,
+          freshFor: wait,
+          onForce: "keep",
+        });
         return kept;
       } else {
         const meter = parseUsage(await response.text());
@@ -196,7 +207,7 @@ export function createUsage(deps: UsageDeps = liveDeps) {
     } catch (error) {
       result = blank("error", error instanceof Error ? error.message : String(error));
     }
-    cache.set(dir, { at: now(), result, onForce });
+    cache.set(dir, { at: now(), measuredAt: now(), heldUntil: null, result, onForce });
     return result;
   }
 
@@ -204,6 +215,12 @@ export function createUsage(deps: UsageDeps = liveDeps) {
     measure,
     authorised: (dir: string) => authorisedDirs.has(dir),
     cached: (dir: string) => cache.get(dir)?.result ?? null,
+    /** When the cached numbers were measured and whether a rate limit holds them; null when
+     *  nothing was measured. */
+    info: (dir: string): UsageInfo | null => {
+      const entry = cache.get(dir);
+      return entry === undefined ? null : { measuredAt: entry.measuredAt, heldUntil: entry.heldUntil };
+    },
     /** Whether a reading is due. `force` (the Reload button) may retake a fresh reading as
      *  far as its `onForce` allows. */
     stale: (dir: string, force = false) => {
