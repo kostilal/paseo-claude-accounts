@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { Identity } from "../shared/parse.ts";
 import type { Registry } from "../shared/registry.ts";
 import type { ChatFacts, Resolved } from "./chatAccount.ts";
+import { chatFactsOf } from "./chatAccount.ts";
 import { type MoveDeps, type MoveReadDeps, checkMove, readMoveCheck } from "./moveCheck.ts";
 
 const one = { id: "account-1", label: "Account one", provider: "claude" as const, home: "/Users/me/.claude-account-1" };
@@ -43,6 +44,45 @@ function deps(overrides: Partial<MoveDeps> = {}): MoveDeps {
 }
 
 const move = { agentId: "ag1", accountId: "account-5" };
+
+/** A chat as Paseo reports it, through what the plugin makes of a profile. */
+const reported = (provider: string) =>
+  chatFactsOf(
+    { agent: { id: "ag1", provider, cwd: "/Users/me/shop", title: null, status: "idle", persistence: { sessionId: "s1" } }, project: null },
+    "ag1",
+    async (name) => (name === "claude-work" ? "claude" : name),
+  );
+
+test("a chat of a Claude profile moves like a Claude chat, onto Claude accounts only", async () => {
+  const chatOf = { chat: () => reported("claude-work") };
+  assert.equal((await checkMove(move, deps(chatOf))).ok, true);
+  const toCodex = await checkMove({ agentId: "ag1", accountId: "cdx" }, deps(chatOf));
+  assert.equal(toCodex.ok, false);
+  if (!toCodex.ok) assert.equal(toCodex.code, "provider-mismatch");
+});
+
+test("a chat of a provider nobody extends still cannot be moved", async () => {
+  const verdict = await checkMove(move, deps({ chat: () => reported("opencode") }));
+  assert.equal(verdict.ok, false);
+  if (!verdict.ok) assert.equal(verdict.code, "unsupported-provider");
+});
+
+test("the first-turn guard sees a profile's chat as Claude's, whose transcripts it can check", async () => {
+  let seen = "";
+  const verdict = await checkMove(
+    move,
+    deps({
+      chat: () => reported("claude-work"),
+      unsaved: async (_agentId, chat) => {
+        seen = chat?.provider ?? "";
+        return true;
+      },
+    }),
+  );
+  assert.equal(seen, "claude");
+  assert.equal(verdict.ok, false);
+  if (!verdict.ok) assert.equal(verdict.code, "first-turn");
+});
 
 test("a chat that can move to an account that can take it is allowed", async () => {
   const verdict = await checkMove(move, deps());

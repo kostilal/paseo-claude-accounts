@@ -24,13 +24,18 @@ export function createFamilies(ttlMs = 60_000, missMs = 5_000) {
     return value;
   }
 
+  async function of(paseo: PaseoApi, provider: string): Promise<ProviderFamily | null> {
+    if (isProviderId(provider)) return familyOf(provider, {});
+    const known = familyOf(provider, await all(paseo));
+    if (known !== null || (cached !== null && Date.now() - cached.at < missMs)) return known;
+    return familyOf(provider, await all(paseo, true));
+  }
+
   return {
     all,
-    async of(paseo: PaseoApi, provider: string): Promise<ProviderFamily | null> {
-      if (isProviderId(provider)) return familyOf(provider, {});
-      const known = familyOf(provider, await all(paseo));
-      if (known !== null || (cached !== null && Date.now() - cached.at < missMs)) return known;
-      return familyOf(provider, await all(paseo, true));
-    },
+    of,
+    /** The provider a chat of `provider` counts as where accounts are concerned: the one a
+     *  profile extends, else `provider` itself. */
+    name: async (paseo: PaseoApi, provider: string): Promise<string> => (await of(paseo, provider))?.family ?? provider,
   };
 }

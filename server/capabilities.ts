@@ -96,6 +96,7 @@ export const chatRpc = defineRpc({
     /** `running`: a turn is in progress. `idle`. `closed`: no session is open. "" for no chat. */
     turn: z.string(),
     archived: z.boolean(),
+    /** A profile's chat says the provider it extends: that is whose accounts it can move to. */
     provider: z.string(),
     /** The registry id of the account the chat runs on; "" when that cannot be told. Never the
      *  default account standing in for an unknown one. */

@@ -44,6 +44,17 @@ test("an unknown provider re-reads the config, but not more often than the miss 
   assert.equal(reads() - before, 1);
 });
 
+test("a chat counts as the provider its profile extends, and otherwise as its own", async () => {
+  const { paseo } = fakePaseo(() => config);
+  const families = createFamilies();
+  assert.equal(await families.name(paseo, "claude-work"), "claude");
+  assert.equal(await families.name(paseo, "claude"), "claude");
+  assert.equal(await families.name(paseo, "codex"), "codex");
+  // Claude's profiles only, as everywhere: a Codex profile stays what Paseo calls it.
+  assert.equal(await families.name(paseo, "codex-work"), "codex-work");
+  assert.equal(await families.name(paseo, "opencode"), "opencode");
+});
+
 test("an unreadable config reads as the last known profiles", async () => {
   let fail = false;
   const paseo = {

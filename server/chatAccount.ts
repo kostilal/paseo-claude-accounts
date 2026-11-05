@@ -62,6 +62,20 @@ export function toChatFacts(found: ChatLookup | null, agentId: string): ChatFact
   };
 }
 
+/**
+ * The same, with the chat's provider told by `family`. A profile's chat runs the same CLI on the
+ * same accounts as the provider it extends, so every account question treats it as that
+ * provider's own: resolving it, moving it, guarding its first turn.
+ */
+export async function chatFactsOf(
+  found: ChatLookup | null,
+  agentId: string,
+  family: (provider: string) => Promise<string>,
+): Promise<ChatFacts | null> {
+  const chat = toChatFacts(found, agentId);
+  return chat === null ? null : { ...chat, provider: await family(chat.provider) };
+}
+
 /** What the chat is doing, as a listener hears it. */
 export function turnOf(chat: ChatFacts): "running" | "idle" | "closed" {
   if (chat.busy) return "running";

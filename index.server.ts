@@ -41,7 +41,7 @@ import { judgeApplied } from "./server/applied.ts";
 import { createApiKeyCheck } from "./server/apiKey.ts";
 import { bounded } from "./server/bounded.ts";
 import { chatRpc, describeAccounts, describeRpc, moveCheckRpc } from "./server/capabilities.ts";
-import { type ChatFacts, readChatAccount, resolveChatAccount, toChatFacts } from "./server/chatAccount.ts";
+import { type ChatFacts, chatFactsOf, readChatAccount, resolveChatAccount } from "./server/chatAccount.ts";
 import { checkDefault, defaultOptions } from "./server/defaults.ts";
 import { createFamilies } from "./server/families.ts";
 import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } from "./server/discover.ts";
@@ -238,7 +238,7 @@ export default function contribute(server: PluginServerContext) {
 
   /** The chat with exactly this id as Paseo has it, or null. */
   const chatLookup = async (paseo: PaseoApi, agentId: string): Promise<ChatFacts | null> =>
-    toChatFacts(await paseo.agents.ref(agentId).refresh().catch(() => null), agentId);
+    chatFactsOf(await paseo.agents.ref(agentId).refresh().catch(() => null), agentId, (provider) => families.name(paseo, provider));
 
   /** Whether restarting the chat now would lose it: its first turn is not on disk yet. */
   const unsavedOf = (paseo: PaseoApi) => (agentId: string, chat: ChatFacts | null) =>
@@ -510,7 +510,9 @@ export default function contribute(server: PluginServerContext) {
       refusalText: (code: RefusalCode, values) => refusalText(strings, code, values),
       log,
     });
-    ledger.note(input.request, env);
+    // Under the provider a profile extends, or its opens would go unrecorded and a switch of its
+    // chat could never be told to have taken.
+    ledger.note({ ...input.request, provider: await families.name(paseo, input.request.provider) }, env);
     return env === undefined ? undefined : { ...input.request, env };
   });
 
