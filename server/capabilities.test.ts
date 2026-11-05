@@ -261,6 +261,8 @@ test("the essentials of each read are in the first 300 characters, which is all 
   assert.match(head, /basis/);
   assert.match(head, /usageStale|usageAgeSeconds/);
   assert.match(ops.accounts.description, /chat_account/, "the list points at the chat read: isDefault is not a chat's account");
+  assert.match(ops.accounts.description, /null with ok: none reported/, "a null fiveHour is not read as a limit nobody has");
+  assert.match(ops.chat_account.description, /null fiveHour means none reported/);
   assert.match(ops.chat_move_check.description.slice(0, 300), /changes nothing/);
 });
 

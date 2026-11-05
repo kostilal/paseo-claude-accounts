@@ -26,6 +26,18 @@ test("a successful read marks the account authorised and reports both bars", asy
   assert.equal(usage.authorised(DIR), true);
 });
 
+test("a reading with only a week is a reading, not an account with no meter", async () => {
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => body(200, { five_hour: null, seven_day: { utilization: 67, resets_at: "2026-11-06T14:00:00Z" } }),
+    version: async () => "2.1.317",
+  });
+  const result = await usage.measure(DIR, HOME, true);
+  assert.equal(result.state, "ok");
+  assert.equal(result.fiveHour, null);
+  assert.equal(result.sevenDay?.utilization, 67);
+});
+
 test("a background read that hits a dialog drops the account back to unauthorised", async () => {
   const usage = createUsage({
     readCredential: async (_service, timeoutMs) => {
