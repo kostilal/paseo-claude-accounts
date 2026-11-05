@@ -230,6 +230,39 @@ test("when the providers cannot be asked, Claude's own chats still get a pill", 
   stop();
 });
 
+test("a failed providers answer is asked again, so an idle profile chat still gets its pill", async () => {
+  const { attach, created } = stubAttach();
+  const agents = fakeAgents([{ agent: { id: "a", workspaceId: "w", provider: "claude-work" } }]);
+  let asks = 0;
+  const providers = async () => {
+    asks += 1;
+    if (asks === 1) throw new Error("the plugin is reloading");
+    return ["claude", "claude-work"];
+  };
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }), providers, 1);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(asks, 2);
+  assert.equal(created.length, 1);
+  stop();
+});
+
+test("stopping ends the asking", async () => {
+  const { attach } = stubAttach();
+  const agents = fakeAgents([]);
+  let asks = 0;
+  const providers = async () => {
+    asks += 1;
+    throw new Error("down");
+  };
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }), providers, 1);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  stop();
+  const before = asks;
+  assert.ok(before >= 1);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(asks, before);
+});
+
 test("a providers answer that never comes does not hold back Claude's own pills", async () => {
   const { attach, created } = stubAttach();
   const agents = fakeAgents([{ agent: { id: "a", workspaceId: "w", provider: "claude" } }]);

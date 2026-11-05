@@ -1,16 +1,7 @@
+import { OVERRIDING_VARS } from "../shared/providers.ts";
 import type { PaseoApi } from "./paseo.ts";
 
-/**
- * Variables that make Claude Code ignore `CLAUDE_CODE_OAUTH_TOKEN`: an API key or auth
- * token is preferred over it, and a cloud provider replaces Anthropic's API altogether.
- * With any of these in a session's environment, switching accounts changes nothing.
- */
-export const OVERRIDING_VARS = [
-  "ANTHROPIC_API_KEY",
-  "ANTHROPIC_AUTH_TOKEN",
-  "CLAUDE_CODE_USE_BEDROCK",
-  "CLAUDE_CODE_USE_VERTEX",
-] as const;
+export { OVERRIDING_VARS };
 
 /** The first overriding variable set in any of the given environments, or "". */
 export function overridingVar(...envs: ReadonlyArray<Record<string, string | undefined> | undefined>): string {
@@ -20,10 +11,9 @@ export function overridingVar(...envs: ReadonlyArray<Record<string, string | und
   return "";
 }
 
-/** The `env` Paseo's config gives the Claude provider, or undefined. */
+/** The `env` the daemon's config gives the Claude provider, or undefined. */
 function providerEnv(config: unknown): Record<string, string> | undefined {
-  const env = (config as { agents?: { providers?: { claude?: { env?: unknown } } } } | null)?.agents?.providers?.claude
-    ?.env;
+  const env = (config as { providers?: { claude?: { env?: unknown } } } | null)?.providers?.claude?.env;
   return typeof env === "object" && env !== null ? (env as Record<string, string>) : undefined;
 }
 

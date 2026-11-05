@@ -88,14 +88,17 @@ function agentOf(raw: unknown): { agentId: string; workspaceId: string; provider
  * A Claude agent is one whose provider `providers` names: Claude's own and every custom
  * provider (profile) extending it. They are asked alongside the list, and again once for
  * each provider seen later that they did not name, so a profile added while the app runs gets
- * pills too. When they cannot be asked, only Claude's own chats get one.
+ * pills too. While they cannot be asked, only Claude's own chats get one, and they are asked
+ * again every `retryMs`.
  */
 export function trackClaudeAgents<Update>(
   agents: AgentSource<Update>,
   registry: PillRegistry,
   providers: () => Promise<readonly string[]> = async () => ["claude"],
+  retryMs = 10_000,
 ): () => void {
   let stopped = false;
+  let retry: ReturnType<typeof setTimeout> | null = null;
   let release: (() => Promise<void>) | null = null;
   const claude = new Set<string>(["claude"]);
   const asked = new Set<string>();
@@ -120,7 +123,15 @@ export function trackClaudeAgents<Update>(
         for (const id of ids) claude.add(id);
         flush();
       },
-      () => {},
+      () => {
+        // Asked again rather than given up on (the plugin may be reloading): an idle chat sends
+        // no update that would ask for it.
+        if (stopped || retry !== null) return;
+        retry = setTimeout(() => {
+          retry = null;
+          if (!stopped) ask();
+        }, retryMs);
+      },
     );
   }
 
@@ -184,6 +195,7 @@ export function trackClaudeAgents<Update>(
 
   return () => {
     stopped = true;
+    if (retry !== null) clearTimeout(retry);
     unsubscribe();
     void release?.().catch(() => {});
     registry.stop();

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Registry } from "../shared/registry.ts";
+import { AUTO } from "../shared/registry.ts";
 import { SessionRefused, type SessionRequest, sessionEnv, withAskedAccount } from "./hook.ts";
 
 /** A default directory none of the test accounts live in, so a credential value is the account's
@@ -597,6 +598,43 @@ test("the environment's account wins over the profile's directory", async () => 
   );
   assert.equal(env?.CLAUDE_SECURESTORAGE_CONFIG_DIR, "");
   assert.equal(stored().agents.ag1, "default");
+});
+
+test("a profile's chat is never refused: it may run on something no variable shows", async () => {
+  const quiet = { log: () => {} };
+  let loginChecks = 0;
+  const loggedOut = async () => {
+    loginChecks += 1;
+    return { dir: "/Users/me/.claude", loggedIn: false };
+  };
+  const create = (env: Record<string, string> = {}) => request({ provider: "claude-work", reason: "create", env });
+  const noPin = async () => ({ family: "claude" as const, configDir: null });
+
+  const unset = profiled({ accounts: [personal], defaults: {} });
+  assert.equal(await sessionEnv(create(), { ...unset.deps, ...quiet, family: noPin, ownLogin: loggedOut }), undefined);
+
+  const removed = profiled({ accounts: [personal], defaults: { claude: "gone" } });
+  assert.equal(await sessionEnv(create(), { ...removed.deps, ...quiet, family: noPin, ownLogin: loggedOut }), undefined);
+
+  const asked = profiled();
+  assert.equal(await sessionEnv(create({ PASEO_CLAUDE_ACCOUNT: "gone" }), { ...asked.deps, ...quiet }), undefined);
+
+  const auto = profiled({ accounts: [personal] });
+  const empty = { ...auto.deps, ...quiet, autoPick: async () => null, ownLogin: loggedOut };
+  assert.equal(await sessionEnv(create({ PASEO_CLAUDE_ACCOUNT: AUTO }), empty), undefined);
+
+  // Its answer could not change anything, and each one runs `claude`.
+  assert.equal(loginChecks, 0);
+});
+
+test("Claude's own chat is still refused rather than started without a login", async () => {
+  const { deps: d } = profiled({ accounts: [personal], defaults: {} });
+  const refused = sessionEnv(request({ provider: "claude", reason: "create" }), {
+    ...d,
+    log: () => {},
+    ownLogin: async () => ({ dir: "/Users/me/.claude", loggedIn: false }),
+  });
+  await assert.rejects(refused, (error: Error) => error.name === "SessionRefused");
 });
 
 test("a profile whose directory is not a registered account opens the profile's way, unbound", async () => {

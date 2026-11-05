@@ -203,7 +203,9 @@ export default function contribute(server: PluginServerContext) {
       (homes ??= (async () => {
         const live = agentId === null ? null : await sessionDir(agentId);
         const own = live?.found ? (live.configDir ?? defaultDir()) : null;
-        return [...new Set([...(await knownHomes(api)), unboundDir(), ...(own === null ? [] : [own])])];
+        // A profile's pinned directory holds its chats' transcripts, registered or not.
+        const pins = Object.values(await families.all(api)).flatMap((family) => (family.configDir === null ? [] : [family.configDir]));
+        return [...new Set([...(await knownHomes(api)), unboundDir(), ...pins, ...(own === null ? [] : [own])])];
       })());
     return (sessionId: string) => homesOnce().then((found) => transcriptExists(sessionId, found)).catch(() => true);
   }
@@ -238,7 +240,7 @@ export default function contribute(server: PluginServerContext) {
 
   /** The chat with exactly this id as Paseo has it, or null. */
   const chatLookup = async (paseo: PaseoApi, agentId: string): Promise<ChatFacts | null> =>
-    chatFactsOf(await paseo.agents.ref(agentId).refresh().catch(() => null), agentId, (provider) => families.name(paseo, provider));
+    chatFactsOf(await paseo.agents.ref(agentId).refresh().catch(() => null), agentId, (provider) => families.of(paseo, provider));
 
   /** Whether restarting the chat now would lose it: its first turn is not on disk yet. */
   const unsavedOf = (paseo: PaseoApi) => (agentId: string, chat: ChatFacts | null) =>
@@ -396,7 +398,8 @@ export default function contribute(server: PluginServerContext) {
       exists: directoryExists,
       identify: (home) => discovery.identify(home),
       chats: async () => {
-        const known = await families.all(paseo);
+        // Fresh: a person pressing this means every chat, a profile added a moment ago included.
+        const known = await families.all(paseo, true);
         return (await listChats(paseo)).map((chat) => ({ ...chat, provider: familyOf(chat.provider, known)?.family ?? chat.provider }));
       },
       reload: (agentId) => reloadAgent(agentId),
@@ -476,9 +479,10 @@ export default function contribute(server: PluginServerContext) {
     ),
   );
 
-  // The pill's chats: Claude's own and those of every profile extending it.
+  // The pill's chats: Claude's own and those of every profile extending it. Rejects when the config
+  // cannot be read, so the client asks again rather than taking "no profiles" for an answer.
   server.handle(claudeProvidersRpc, async (_input, { paseo }) => {
-    const known = await families.all(paseo, true);
+    const known = await families.read(paseo);
     return { providers: ["claude", ...Object.keys(known)] };
   });
 

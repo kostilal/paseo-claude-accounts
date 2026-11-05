@@ -115,7 +115,8 @@ export async function directoryExists(path: string): Promise<boolean> {
  *  A new chat is refused (`SessionRefused`) rather than started without a login: when the
  *  default is set but cannot be used (removed, no switching key, key rejected, directory
  *  gone), and when no default is set and the chat's own directory is known to be logged
- *  out. Anything else that cannot apply is a no-op: a session on the wrong account is a
+ *  out. Only a chat of ours: a profile may run on anything, whatever its env says, so its chat is
+ *  left to open its own way. Anything else that cannot apply is a no-op: a session on the wrong account is a
  *  nuisance, one that cannot start is worse. */
 export async function sessionEnv(
   request: SessionRequest,
@@ -136,6 +137,10 @@ export async function sessionEnv(
     return await newChatEnv(registry, provider, request, deps);
   } catch (error) {
     if (error instanceof SessionRefused) {
+      if (!isProviderId(request.provider)) {
+        log(`accounts: leaving the profile chat ${request.agentId} alone (${error.code})`);
+        return undefined;
+      }
       log(`accounts: refused to start ${request.agentId} (${error.code})`);
       throw error;
     }
@@ -239,8 +244,9 @@ async function newChatEnv(
   }
 
   // No default, or nothing to pick: the chat runs on its own directory's login, which is fine
-  // when there is one.
-  if (provider !== "claude" || deps.ownLogin === undefined) return undefined;
+  // when there is one. Not asked for a profile: what it runs on cannot be told, and it is not
+  // refused either way.
+  if (provider !== "claude" || !isProviderId(request.provider) || deps.ownLogin === undefined) return undefined;
   const own = await deps.ownLogin(request);
   if (own.loggedIn !== false) return undefined;
   if (checked.state === "auto") throw refuse("auto-none", { dir: own.dir });

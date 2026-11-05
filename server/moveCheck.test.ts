@@ -50,7 +50,7 @@ const reported = (provider: string) =>
   chatFactsOf(
     { agent: { id: "ag1", provider, cwd: "/Users/me/shop", title: null, status: "idle", persistence: { sessionId: "s1" } }, project: null },
     "ag1",
-    async (name) => (name === "claude-work" ? "claude" : name),
+    async (name) => (name === "claude-work" ? { family: "claude", configDir: null } : null),
   );
 
 test("a chat of a Claude profile moves like a Claude chat, onto Claude accounts only", async () => {

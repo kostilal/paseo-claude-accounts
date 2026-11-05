@@ -8,7 +8,7 @@ function paseoWithEnv(env: unknown, calls: { n: number } = { n: 0 }): PaseoApi {
     config: {
       get: async () => {
         calls.n += 1;
-        return { requestId: "r", config: { agents: { providers: { claude: { env } } } } };
+        return { requestId: "r", config: { providers: { claude: { env } } } };
       },
     },
   } as unknown as PaseoApi;

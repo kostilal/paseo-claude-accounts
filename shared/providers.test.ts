@@ -58,16 +58,14 @@ test("a directory names its own provider, and an unrelated one names none", () =
 
 test("a custom provider extending ours is found, with the config directory its profile pins", () => {
   const config = {
-    agents: {
-      providers: {
-        claude: { env: { CLAUDE_CONFIG_DIR: "/ignored" } },
-        "claude-work": { extends: "claude", label: "Claude (Work)", env: { CLAUDE_CONFIG_DIR: "/Users/me/.claude-work" } },
-        "claude-fast": { extends: "claude", env: { CLAUDE_CONFIG_DIR: "" } },
-        "codex-team": { extends: "codex", env: { CODEX_HOME: "/Users/me/.codex-team" } },
-        "my-acp": { extends: "acp" },
-        opencode: { enabled: false },
-        broken: "nonsense",
-      },
+    providers: {
+      claude: { env: { CLAUDE_CONFIG_DIR: "/ignored" } },
+      "claude-work": { extends: "claude", label: "Claude (Work)", env: { CLAUDE_CONFIG_DIR: "/Users/me/.claude-work" } },
+      "claude-fast": { extends: "claude", env: { CLAUDE_CONFIG_DIR: "" } },
+      "codex-team": { extends: "codex", env: { CODEX_HOME: "/Users/me/.codex-team" } },
+      "my-acp": { extends: "acp" },
+      opencode: { enabled: false },
+      broken: "nonsense",
     },
   };
   assert.deepEqual(providerFamilies(config), {
@@ -77,8 +75,44 @@ test("a custom provider extending ours is found, with the config directory its p
   });
 });
 
+test("a profile on its own key, cloud or gateway runs on no login, so it is left out", () => {
+  const pinned = { CLAUDE_CONFIG_DIR: "/Users/me/.claude-work" };
+  const profile = (env: Record<string, string>) => ({ extends: "claude", env: { ...pinned, ...env } });
+  const config = {
+    providers: {
+      keyed: profile({ ANTHROPIC_API_KEY: "k" }),
+      token: profile({ ANTHROPIC_AUTH_TOKEN: "t" }),
+      bedrock: profile({ CLAUDE_CODE_USE_BEDROCK: "1" }),
+      vertex: profile({ CLAUDE_CODE_USE_VERTEX: "1" }),
+      gateway: profile({ ANTHROPIC_BASE_URL: "https://gateway.example" }),
+      foundry: profile({ CLAUDE_CODE_USE_FOUNDRY: "1" }),
+      aws: profile({ CLAUDE_CODE_USE_ANTHROPIC_AWS: "1" }),
+      google: profile({ CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD: "1" }),
+      mantle: profile({ CLAUDE_CODE_USE_MANTLE: "1" }),
+      useGateway: profile({ CLAUDE_CODE_USE_GATEWAY: "1" }),
+      oauth: profile({ CLAUDE_CODE_OAUTH_TOKEN: "t" }),
+      blank: profile({ ANTHROPIC_API_KEY: "" }),
+      wrapped: { extends: "claude", command: ["/opt/homebrew/bin/claude"], env: pinned },
+    },
+  };
+  assert.deepEqual(Object.keys(providerFamilies(config)), ["blank", "wrapped"]);
+});
+
+test("a profile is judged by the env it really gets, merged over the provider it extends", () => {
+  const providers = {
+    claude: { env: { ANTHROPIC_API_KEY: "k", CLAUDE_CONFIG_DIR: "/Users/me/.claude-base" } },
+    inherits: { extends: "claude" },
+    clears: { extends: "claude", env: { ANTHROPIC_API_KEY: "" } },
+    pins: { extends: "claude", env: { ANTHROPIC_API_KEY: "", CLAUDE_CONFIG_DIR: "/Users/me/.claude-own" } },
+  };
+  assert.deepEqual(providerFamilies({ providers }), {
+    clears: { family: "claude", configDir: "/Users/me/.claude-base" },
+    pins: { family: "claude", configDir: "/Users/me/.claude-own" },
+  });
+});
+
 test("a config without providers has no profiles", () => {
-  for (const config of [null, undefined, {}, { agents: {} }, { agents: { providers: [] } }]) {
+  for (const config of [null, undefined, {}, { providers: [] }, { providers: "nonsense" }]) {
     assert.deepEqual(providerFamilies(config), {});
   }
 });
