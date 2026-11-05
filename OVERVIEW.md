@@ -2,7 +2,7 @@ Claude Accounts lets you run Paseo chats on more than one Claude subscription an
 
 ## What you get
 
-- **A pill above every Claude chat** showing which account the chat runs on and how much of its tighter usage window is used. Pressing it lists every account with its 5-hour and weekly allowance, and switches the chat with one more press.
+- **A pill above every Claude chat** showing which account the chat runs on and how much of its 5-hour window is used (`5h 18%`), or of its week on an account with no 5-hour window (`7d 62%`). Pressing it lists every account with its 5-hour and weekly allowance, and switches the chat with one more press.
 - **An Accounts screen** in the sidebar listing every login found on the machine, grouped by subscription, with usage bars, a login button for accounts that are signed out, and a button to add a new account.
 - **The right account from the start.** New chats open on the account you choose, so they need no switch later: a default account, or **Auto**, which picks by the 5-hour and weekly allowance left (the account whose week resets soonest, while it has room). The **Users** button in the workspace header sets that default; the pill above a chat switches that one chat. On the new-workspace screen **+** → **Claude account** picks the first chat's account. With **One account per task** on (Settings), every chat of a workspace stays on Auto's first pick. Scripts can set `PASEO_CLAUDE_ACCOUNT`.
 - **Ask from ChatGPT** (with Paseo God Mode): which account any chat really runs on, with its 5-hour and weekly allowance and how old the numbers are, and a move of one chat that is checked and confirmed first.

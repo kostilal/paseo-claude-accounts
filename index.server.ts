@@ -47,6 +47,7 @@ import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } fr
 import { ACCOUNT_VAR, directoryExists, sessionEnv, withAskedAccount } from "./server/hook.ts";
 import { openLogin } from "./server/login.ts";
 import { createChatLimits } from "./server/chatLimits.ts";
+import { usedSummary } from "./server/limits.ts";
 import { migrateFromTokens } from "./server/migrate.ts";
 import { readMoveCheck } from "./server/moveCheck.ts";
 import { createOverview, createUsageRow } from "./server/overview.ts";
@@ -523,12 +524,11 @@ export default function contribute(server: PluginServerContext) {
       },
       ...rows.map((row) => {
         const name = loginLabel({ email: row.email, orgName: row.orgName, plan: "" }, row.label);
-        const used = [row.fiveHour, row.sevenDay].map((bar) => (bar === null ? "–" : `${Math.round(bar.utilization)}%`));
         return {
           id: row.switchTo,
           identifier: row.label,
           title: name,
-          subtitle: `${strings.fiveHourUsage} ${used[0]} · ${strings.sevenDayUsage} ${used[1]}`,
+          subtitle: usedSummary(row.fiveHour, row.sevenDay, strings),
           url: USAGE_URL,
           // The label rather than the login: this text goes into the chat's prompt.
           text: strings.attachAccountText.replace("{label}", row.label),

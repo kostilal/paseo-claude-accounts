@@ -97,10 +97,10 @@ function nearlyFullText(account: PillAccount | null, strings: Strings): string |
 const pillKey = (agentId: string) => ["accounts", "pill", agentId];
 
 /**
- * The pill icon: a ring of the current account's 5-hour window (full once either window is
- * exhausted), plus a green dot when the allowance is (nearly) gone and another account could
- * take over. The label beside it is host-owned, so the figure is pushed through
- * `registration.update()`.
+ * The pill icon: a ring of the window the pill reads, the 5-hour one or the week on an account
+ * without one (full once either window is exhausted), plus a green dot when the allowance is
+ * (nearly) gone and another account could take over. The label beside it is host-owned, so the
+ * figure is pushed through `registration.update()`.
  */
 function AccountPillIcon(
   props: PluginButtonIconProps & { registration: { current: PluginButtonRegistration | null } },

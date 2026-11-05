@@ -40,28 +40,39 @@ export function formatWait(ms: number, strings: Strings): string {
 }
 
 /**
- * What the pill's ring fills to: the 5-hour window, the one that moves while you work. The
- * week has its own line in the list; a ring stuck at the week's 82% says nothing about the
- * next hour. Once either window is exhausted the ring is full, because the account is
- * unusable whichever one ran out. Null when the 5-hour window is unknown.
+ * The window the pill reads: the 5-hour one, which moves while you work; a ring stuck at the
+ * week's 82% says nothing about the next hour. The week when the account has no 5-hour window:
+ * the plan has none, the usage endpoint then sends only the week. The week too once it is
+ * exhausted, because then it is what stops the account, however roomy the 5 hours. Null when
+ * neither is known.
  */
-export function pillPercent(current: PillAccount): number | null {
+function pillWindow({ fiveHour, sevenDay }: PillAccount): "fiveHour" | "sevenDay" | null {
   // Utilization itself, not exhaustedResetIn: that one skips a window whose reset time is
   // unknown, and an exhausted week without one would read as a roomy 5 hours.
-  const exhausted = [current.fiveHour, current.sevenDay].some((bar) => bar !== null && bar.utilization >= EXHAUSTED_AT);
-  if (exhausted) return 100;
-  return current.fiveHour?.utilization ?? null;
+  const weekGone = sevenDay !== null && sevenDay.utilization >= EXHAUSTED_AT;
+  if (fiveHour !== null && !weekGone) return "fiveHour";
+  return sevenDay !== null ? "sevenDay" : null;
 }
 
-/** The figure beside the pill's ring: the 5-hour window as a percentage, the time until
- *  reset once either window is exhausted, or "" when usage is unknown (never a reassuring
- *  0%). */
+/** What the pill's ring fills to: the window it reads, and full once that one is exhausted. */
+export function pillPercent(current: PillAccount): number | null {
+  const window = pillWindow(current);
+  if (window === null) return null;
+  const utilization = current[window]!.utilization;
+  return utilization >= EXHAUSTED_AT ? 100 : utilization;
+}
+
+/** The figure beside the pill's ring: the window it reads, tagged so a 5-hour figure and a
+ *  weekly one cannot be taken for each other ("5h 18%", "7d 62%"); the time until reset once
+ *  either window is exhausted; or "" when usage is unknown (never a reassuring 0%). */
 export function pillFigure(current: PillAccount | null, now: number, strings: Strings): string {
   if (current === null) return strings.pillNoAccount;
   const wait = exhaustedResetIn(current.fiveHour, current.sevenDay, now);
   if (wait !== null) return formatWait(wait, strings);
   const percent = pillPercent(current);
-  return percent === null ? "" : `${Math.round(percent)}%`;
+  if (percent === null) return "";
+  const tag = pillWindow(current) === "fiveHour" ? strings.pillFiveHourTag : strings.pillSevenDayTag;
+  return `${tag} ${Math.round(percent)}%`;
 }
 
 export function providerName(provider: string): string {
@@ -76,7 +87,7 @@ export function windowText(label: string, bar: Window, now: number, strings: Str
 }
 
 /** The second line of an account row, e.g. "Claude · 5 hours 18% · resets in 3 h". The week
- *  has its own line, `weekLine`. */
+ *  has its own line, `weekLine`, unless it is the account's only window: then it stands here. */
 export function usageLine(account: PillAccount, now: number, strings: Strings): string {
   const parts = [providerName(account.provider)];
   if (!account.loggedIn) {
@@ -94,13 +105,14 @@ export function usageLine(account: PillAccount, now: number, strings: Strings): 
     return parts.join(" · ");
   }
   if (account.fiveHour !== null) parts.push(windowText(strings.fiveHourUsage, account.fiveHour, now, strings));
+  else if (account.sevenDay !== null) parts.push(windowText(strings.sevenDayUsage, account.sevenDay, now, strings));
   return parts.join(" · ");
 }
 
 /** The third line of an account row, e.g. "Week 62% · resets in 5 d", or "" when there is
- *  no weekly figure to show. */
+ *  no weekly figure to show or `usageLine` already shows it. */
 export function weekLine(account: PillAccount, now: number, strings: Strings): string {
-  if (!account.loggedIn || account.usage === "unsupported" || account.sevenDay === null) return "";
+  if (!account.loggedIn || account.usage === "unsupported" || account.sevenDay === null || account.fiveHour === null) return "";
   return windowText(strings.sevenDayUsage, account.sevenDay, now, strings);
 }
 
