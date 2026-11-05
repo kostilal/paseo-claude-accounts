@@ -16,6 +16,14 @@ export const switchCode = z.enum([
   "first-turn",
   "paseo-not-found",
   "reload-failed",
+  /** No chat has exactly this id. */
+  "unknown-chat",
+  /** The chat is archived, and a restart would bring it back from the archive. */
+  "archived",
+  /** The account belongs to another provider than the chat: the hook would ignore it. */
+  "provider-mismatch",
+  /** The chat restarted, but the new session did not take the account; the binding was put back. */
+  "not-applied",
 ]);
 
 export type SwitchCode = z.output<typeof switchCode>;
@@ -29,8 +37,19 @@ export const switchAccountRpc = defineRpc({
   }),
   output: z.object({
     code: switchCode.default(""),
-    /** The child process's message for `reload-failed`; empty otherwise. */
+    /** The child process's message for `reload-failed`, or why `not-applied`; empty otherwise. */
     error: z.string().default(""),
+    /** The account the chat was bound to before this call; "" when it had none. */
+    from: z.string().default(""),
+    /** The account the chat is bound to now because of this call; "" when nothing moved. */
+    to: z.string().default(""),
+    /** How sure it is that the chat took the account. `verified`: the hook gave the new session
+     *  that account. `next-open`: a closed chat only changed its binding and takes the account when
+     *  it next opens. `pending`: the restart was still running when the time was up. `unverified`:
+     *  nothing says either way. "": not claimed. */
+    applied: z.enum(["", "verified", "next-open", "pending", "unverified"]).default(""),
+    /** A turn was in progress when the restart began and may have been cut off. */
+    interrupted: z.boolean().default(false),
   }),
 });
 

@@ -323,3 +323,51 @@ test("a failing refresh is reported as expired, not as an error", async () => {
   });
   assert.equal((await usage.measure(DIR, HOME, false)).state, "expired");
 });
+
+test("a reading is stamped with when it was measured", async () => {
+  let clock = 5_000;
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => body(200, { five_hour: { utilization: 20, resets_at: "x" } }),
+    version: async () => "2.1.268",
+    now: () => clock,
+  });
+  assert.equal(usage.info(DIR), null, "nothing measured, nothing to say");
+  await usage.measure(DIR, HOME, true);
+  assert.deepEqual(usage.info(DIR), { measuredAt: 5_000, heldUntil: null });
+  clock = 9_000;
+  await usage.measure(DIR, HOME, true);
+  assert.deepEqual(usage.info(DIR), { measuredAt: 9_000, heldUntil: null });
+});
+
+test("numbers kept through a 429 keep their own age and say until when they are held", async () => {
+  let clock = 0;
+  let status = 200;
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () =>
+      status === 200
+        ? body(200, { five_hour: { utilization: 18, resets_at: "x" } })
+        : ({ status: 429, headers: new Headers({ "retry-after": "1500" }), text: async () => "" } as Response),
+    version: async () => "2.1.268",
+    now: () => clock,
+  });
+  await usage.measure(DIR, HOME, true);
+  status = 429;
+  clock = 11 * 60 * 1000;
+  await usage.measure(DIR, HOME, false);
+  // The numbers are still the first reading's; only the hold is new.
+  assert.deepEqual(usage.info(DIR), { measuredAt: 0, heldUntil: 11 * 60 * 1000 + 1500 * 1000 });
+});
+
+test("an answer that is not a reading is stamped with the attempt and holds nothing", async () => {
+  const clock = 7_000;
+  const usage = createUsage({
+    readCredential: async () => ({ token: "stale", expiresAt: 1_000 }),
+    request: async () => body(200, {}),
+    version: async () => "2.1.268",
+    now: () => clock,
+  });
+  assert.equal((await usage.measure(DIR, HOME, false)).state, "expired");
+  assert.deepEqual(usage.info(DIR), { measuredAt: 7_000, heldUntil: null });
+});

@@ -6,7 +6,7 @@ import type { PluginRpcContract } from "@getpaseo/plugin";
 import { accountView, listAccounts } from "../shared/accounts.ts";
 import type { Registry } from "../shared/registry.ts";
 import { switchAccountRpc, switchAllRpc } from "../shared/switch.ts";
-import { chatRpc, describeAccounts, describeRpc, OPERATIONS, readChat } from "./capabilities.ts";
+import { chatRpc, describeAccounts, describeRpc, moveCheckRpc, OPERATIONS } from "./capabilities.ts";
 import { type SwitchDeps, switchAccount } from "./switchAccount.ts";
 import { type Chat, switchAll } from "./switchAll.ts";
 
@@ -14,13 +14,15 @@ const ID = "3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b";
 
 // What a caller would send for each operation; the ones left out take no arguments.
 const EXAMPLES: Record<string, Record<string, unknown>> = {
-  chat: { agentId: ID },
+  chat_account: { agentId: ID },
+  chat_account_fresh: { agentId: ID },
+  chat_move_check: { agentId: ID, account: "work" },
   switch_chat: { agentId: ID, account: "work" },
   switch_all: { account: "work" },
 };
 
 // The names index.server.ts registers them under.
-const CONTRACTS: Record<string, PluginRpcContract> = { listAccounts, chatRpc, switchAccountRpc, switchAllRpc };
+const CONTRACTS: Record<string, PluginRpcContract> = { listAccounts, chatRpc, moveCheckRpc, switchAccountRpc, switchAllRpc };
 
 // God Mode's rule for field names whose text it never passes on.
 const SECRET = /token|secret|password|passwd|credential|cookie|bearer|authorization|api.?key|private.?key/i;
@@ -109,7 +111,7 @@ test("one read is the default, and every action is confirmed with a text first",
 
 test("nothing that opens a terminal, touches the Keychain or forgets an account is offered", () => {
   const offered = new Set(describeAccounts().operations.map((op) => op.method));
-  assert.deepEqual([...offered].sort(), ["accounts.chat", "accounts.list", "accounts.switch", "accounts.switch-all"]);
+  assert.deepEqual([...offered].sort(), ["accounts.chat", "accounts.list", "accounts.move-check", "accounts.switch", "accounts.switch-all"]);
 });
 
 test("the texts fit the contract's limits, so none is cut", () => {
@@ -147,27 +149,6 @@ test("a switch's target is a read its arguments fill, showing fields that read a
     const answers = Object.keys((contract.output as unknown as { shape: object }).shape);
     for (const field of target.show) assert.ok(answers.includes(field), `${read!.id} answers ${field}`);
   }
-});
-
-test("the chat is found by its exact id only, and what it shows does not change by itself", async () => {
-  // Paseo answers for a unique prefix or a title too, with the full agent.
-  const lookup = (status: string) => async (asked: string) =>
-    ID.startsWith(asked) || asked === "Fix the login"
-      ? { agent: { id: ID, title: "Fix the login", cwd: "/Users/me/projects/shop", status, updatedAt: status }, project: { projectName: "shop" } }
-      : null;
-  const facts = await readChat(ID, lookup("running"));
-  assert.deepEqual(facts, { title: "Fix the login", project: "shop", error: "" });
-  assert.deepEqual(await readChat(ID, lookup("idle")), facts);
-  assert.equal(refused("chat", facts), false);
-  for (const other of [ID.slice(0, 7), "Fix the login", "nope"]) {
-    const answer = await readChat(other, lookup("idle"));
-    assert.ok(refused("chat", answer), other);
-  }
-});
-
-test("a chat without a project or a title is still named by what it has", async () => {
-  const facts = await readChat(ID, async () => ({ agent: { id: ID, title: null, cwd: "/Users/me/projects/shop" }, project: null }));
-  assert.deepEqual(facts, { title: "", project: "shop", error: "" });
 });
 
 test("a single switch reads as refused exactly when nothing changed", async () => {
@@ -219,4 +200,73 @@ test("nothing read out is a secret, and the account rows carry no secret text", 
   for (const [key, schema] of Object.entries(accountView.shape)) {
     if (SECRET.test(key)) assert.equal(schema.safeParse("text").success, false, `${key} holds no text`);
   }
+});
+
+test("the operations are exactly the ones God Mode is meant to find, and the old chat read is gone", () => {
+  assert.deepEqual(
+    OPERATIONS.map((op) => op.id),
+    ["accounts", "accounts_fresh", "chat_account", "chat_account_fresh", "chat_move_check", "switch_chat", "switch_all"],
+  );
+});
+
+test("the chat read comes in a cached and a measured-now form, like the accounts read", () => {
+  const byId = Object.fromEntries(describeAccounts().operations.map((op) => [op.id, op]));
+  assert.deepEqual(byId.chat_account.fixed, { force: false });
+  assert.deepEqual(byId.chat_account_fresh.fixed, { force: true });
+  assert.equal(byId.chat_account.method, "accounts.chat");
+  assert.equal(byId.chat_account_fresh.method, "accounts.chat");
+  assert.equal(byId.chat_account.kind, "read");
+  assert.equal(byId.chat_account_fresh.kind, "read");
+});
+
+test("a switch is confirmed against the dry run, which needs the chat and the account", () => {
+  const ops = Object.fromEntries(describeAccounts().operations.map((op) => [op.id, op]));
+  assert.deepEqual(ops.switch_chat.target, {
+    read: "chat_move_check",
+    args: { agentId: "agentId", account: "account" },
+    show: ["title", "project", "current", "to", "turn"],
+  });
+  assert.equal(ops.chat_move_check.kind, "read");
+  assert.deepEqual((ops.chat_move_check.input.required as string[]).sort(), ["account", "agentId"]);
+  assert.deepEqual(ops.chat_move_check.outcome, { error: ["code", "error"] });
+});
+
+test("a refused dry run and a refused switch both read as not done", () => {
+  assert.ok(refused("chat_move_check", { code: "archived", error: "the chat is archived" }));
+  assert.equal(refused("chat_move_check", { code: "", error: "" }), false);
+  assert.ok(refused("chat_account", { error: "no chat has exactly this id" }));
+  assert.ok(refused("switch_chat", { code: "not-applied", error: "left alone" }));
+  // Not done is a code or an error; "pending" and "unverified" are done.
+  assert.equal(refused("switch_chat", { code: "", error: "", applied: "pending" }), false);
+  assert.equal(refused("switch_chat", { code: "", error: "", applied: "unverified" }), false);
+});
+
+test("the answers name what a listener needs, and every field they name exists in the RPC they read from", () => {
+  const ops = Object.fromEntries(describeAccounts().operations.map((op) => [op.id, op]));
+  const fields = (id: string) => ops[id].output?.fields ?? [];
+  const wanted = ["account", "accountName", "email", "subscriptionType", "basis", "note", "fiveHour", "sevenDay", "usageAt", "usageAgeSeconds", "usageStale", "usageHeldSeconds"];
+  for (const field of wanted) assert.ok(fields("chat_account").includes(field), "chat_account shows " + field);
+  assert.deepEqual(fields("chat_account"), fields("chat_account_fresh"));
+  for (const field of ["code", "error", "from", "to", "applied", "interrupted"]) assert.ok(fields("switch_chat").includes(field), field);
+  const shape = (contract: { output: unknown }) => Object.keys((contract.output as { shape: object }).shape);
+  for (const field of fields("chat_account")) assert.ok(shape(chatRpc).includes(field), "chat answers " + field);
+  for (const field of fields("chat_move_check")) assert.ok(shape(moveCheckRpc).includes(field), "move-check answers " + field);
+  for (const field of fields("switch_chat")) assert.ok(shape(switchAccountRpc).includes(field), "switch answers " + field);
+});
+
+test("the essentials of each read are in the first 300 characters, which is all the speech text shows", () => {
+  const ops = Object.fromEntries(describeAccounts().operations.map((op) => [op.id, op]));
+  const head = ops.chat_account.description.slice(0, 300);
+  assert.match(head, /never assume the default account/);
+  assert.match(head, /basis/);
+  assert.match(head, /usageStale|usageAgeSeconds/);
+  assert.match(ops.accounts.description, /chat_account/, "the list points at the chat read: isDefault is not a chat's account");
+  assert.match(ops.chat_move_check.description.slice(0, 300), /changes nothing/);
+});
+
+test("the plugin says it also tells which account a chat runs on, and answers to the words for it", () => {
+  const described = describeAccounts();
+  assert.match(described.summary, /chat/i);
+  for (const alias of ["quota", "limits", "subscription"]) assert.ok(described.aliases.includes(alias), alias);
+  assert.ok(described.aliases.length <= 20);
 });

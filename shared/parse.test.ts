@@ -54,6 +54,14 @@ test("a missing window is null rather than a zero bar", () => {
   });
 });
 
+test("no 5-hour window, whichever way the endpoint says it, leaves the week standing", () => {
+  const week = { utilization: 67, resets_at: "2026-11-06T14:00:00Z" };
+  const expected = { fiveHour: null, sevenDay: { utilization: 67, resetsAt: "2026-11-06T14:00:00Z" } };
+  assert.deepEqual(parseUsage(JSON.stringify({ seven_day: week })), expected);
+  assert.deepEqual(parseUsage(JSON.stringify({ five_hour: null, seven_day: week })), expected);
+  assert.deepEqual(parseUsage(JSON.stringify({ five_hour: { utilization: null, resets_at: null }, seven_day: week })), expected);
+});
+
 test("a 401 body has no windows at all", () => {
   const raw = JSON.stringify({ error: { type: "authentication_error" } });
   assert.deepEqual(parseUsage(raw), { fiveHour: null, sevenDay: null });

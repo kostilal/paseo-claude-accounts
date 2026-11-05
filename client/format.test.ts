@@ -47,7 +47,7 @@ test("a wait is shown in the coarsest unit that still says something", () => {
 
 test("the pill figure is the 5-hour window until a wall, then the wait, and empty when unread", () => {
   // 5 hours at 18%, the week at 62%: the pill says 18%, not the fuller week.
-  assert.equal(pillFigure(account(), now, strings), "18%");
+  assert.equal(pillFigure(account(), now, strings), "5ч 18%");
   assert.equal(
     pillFigure(account({ fiveHour: { utilization: 100, resetsAt: "2026-09-16T12:47:00Z" } }), now, strings),
     "47 мин",
@@ -65,13 +65,44 @@ test("an exhausted week still shows the wait, not a roomy 5-hour figure", () => 
 test("an exhausted week with no reset time still fills the ring, never a roomy 5 hours", () => {
   const weekGone = account({ sevenDay: { utilization: 100, resetsAt: "" } });
   assert.equal(pillPercent(weekGone), 100);
-  assert.equal(pillFigure(weekGone, now, strings), "100%");
+  // Tagged with the week: that is the window at 100%, the 5 hours are at 18%.
+  assert.equal(pillFigure(weekGone, now, strings), "7д 100%");
 });
 
-test("the pill ring follows the 5-hour window, and is empty when that window is unknown", () => {
+test("the pill ring follows the 5-hour window, and is empty when nothing is known", () => {
   assert.equal(pillPercent(account()), 18);
-  assert.equal(pillPercent(account({ fiveHour: null })), null);
-  assert.equal(pillFigure(account({ fiveHour: null }), now, strings), "");
+  assert.equal(pillPercent(account({ fiveHour: null, sevenDay: null })), null);
+  assert.equal(pillFigure(account({ fiveHour: null, sevenDay: null }), now, strings), "");
+});
+
+test("an account with no 5-hour window reads its week, tagged so it is not taken for 5 hours", () => {
+  const weekOnly = account({ fiveHour: null });
+  assert.equal(pillPercent(weekOnly), 62);
+  assert.equal(pillFigure(weekOnly, now, strings), "7д 62%");
+});
+
+test("the pill tag names the window in every language", () => {
+  const weekOnly = account({ fiveHour: null });
+  assert.equal(pillFigure(account(), now, t("en")), "5h 18%");
+  assert.equal(pillFigure(weekOnly, now, t("en")), "7d 62%");
+  assert.equal(pillFigure(account(), now, t("uk")), "5г 18%");
+  assert.equal(pillFigure(weekOnly, now, t("uk")), "7д 62%");
+});
+
+test("a spent week on an account with no 5-hour window fills the ring and shows the wait", () => {
+  const spent = account({ fiveHour: null, sevenDay: { utilization: 100, resetsAt: "2026-09-16T12:47:00Z" } });
+  assert.equal(pillPercent(spent), 100);
+  assert.equal(pillFigure(spent, now, strings), "47 мин");
+});
+
+test("a spent 5 hours fills the ring whatever the week, which is not what ran out", () => {
+  const spent = account({ fiveHour: { utilization: 99.7, resetsAt: "" } });
+  assert.equal(pillPercent(spent), 100);
+  assert.equal(pillFigure(spent, now, strings), "5ч 100%");
+});
+
+test("an account with only a 5-hour window reads that window", () => {
+  assert.equal(pillFigure(account({ sevenDay: null }), now, strings), "5ч 18%");
 });
 
 test("a row's usage line names the provider and the state", () => {
@@ -88,6 +119,15 @@ test("the week has its own line with its reset, and none when there is nothing t
   assert.equal(weekLine(account({ sevenDay: { utilization: 62, resetsAt: "" } }), now, strings), `${strings.sevenDayUsage} 62%`);
   assert.equal(weekLine(account({ sevenDay: null }), now, strings), "");
   assert.equal(weekLine(account({ loggedIn: false }), now, strings), "");
+});
+
+test("an account with no 5-hour window has one line, with the week and its reset", () => {
+  const weekOnly = account({ fiveHour: null });
+  assert.equal(usageLine(weekOnly, now, strings), `Claude · ${strings.sevenDayUsage} 62% · ${strings.resetIn} 36 ч`);
+  assert.equal(weekLine(weekOnly, now, strings), "");
+  const spent = account({ fiveHour: null, sevenDay: { utilization: 100, resetsAt: "2026-09-16T12:47:00Z" } });
+  assert.equal(usageLine(spent, now, strings), `Claude · ${strings.limitExhausted} · ${strings.resetIn} 47 мин`);
+  assert.equal(weekLine(spent, now, strings), "");
 });
 
 test("a spare is another logged-in account with room left", () => {

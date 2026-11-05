@@ -35,6 +35,10 @@ export interface Strings {
   switchNotLoggedIn: string;
   switchFirstTurn: string;
   switchUnknownAccount: string;
+  switchUnknownChat: string;
+  switchArchived: string;
+  switchProviderMismatch: string;
+  switchNotApplied: string;
   switchBusy: string;
   pillAgentUnknown: string;
   pillLoadFailed: string;
@@ -74,6 +78,10 @@ export interface Strings {
   refuseNotSet: string;
   refuseNoAccounts: string;
   pillUnread: string;
+  /** Before the pill's percentage, naming its window. Short, and the same width: the pill
+   *  sits above the composer on a phone too. */
+  pillFiveHourTag: string;
+  pillSevenDayTag: string;
   /** Delete only forgets: every confirm says the folder and login stay. */
   deleteAccount: string;
   deleteConfirm: string;
@@ -169,10 +177,14 @@ const en: Strings = {
   switchTo: "Switch to",
   switchPaseoMissing: "Could not find the paseo command to restart the session",
   switchMissingDirectory: "That account's directory is gone",
-  switchUnsupportedProvider: "That account is for a provider this plugin does not run yet",
+  switchUnsupportedProvider: "This plugin cannot move a chat of that provider to another account",
   switchNotLoggedIn: "Nobody is logged in to that account's directory yet",
   switchFirstTurn: "This chat's first turn is not saved yet, and restarting it now would lose the conversation. Wait for the first reply, then switch.",
   switchUnknownAccount: "That account is not in the list any more",
+  switchUnknownChat: "Paseo has no chat with this id",
+  switchArchived: "This chat is archived, and restarting it would bring it back from the archive",
+  switchProviderMismatch: "That account belongs to another provider than this chat",
+  switchNotApplied: "The chat restarted but did not take that account, so its previous one is kept",
   switchBusy: "This will interrupt the current turn. Press again to switch anyway.",
   pillAgentUnknown: "Can't see this chat yet.",
   pillLoadFailed: "Could not load accounts.",
@@ -209,6 +221,8 @@ const en: Strings = {
   refuseNotSet: "This chat has no Claude account: nobody is logged in to {dir} and no default account is set. Choose one in Settings → Plugins → Claude Accounts, or log in on the Accounts screen.",
   refuseNoAccounts: "This chat has no Claude account: nobody is logged in to {dir} and no account has been added. Log in to one on the Accounts screen, then choose it in Settings → Plugins → Claude Accounts.",
   pillUnread: "…",
+  pillFiveHourTag: "5h",
+  pillSevenDayTag: "7d",
   deleteAccount: "Delete",
   deleteConfirm: "Remove this account from the list? Its folder and login stay where they are.",
   deleteSuggestionConfirm: "Hide this from the list? Its folder and login stay where they are.",
@@ -285,10 +299,14 @@ const ru: Strings = {
   switchTo: "Переключиться на",
   switchPaseoMissing: "Не нашёл команду paseo, чтобы перезапустить сессию",
   switchMissingDirectory: "Директории этого аккаунта больше нет",
-  switchUnsupportedProvider: "Этот аккаунт для провайдера, который плагин пока не ведёт",
+  switchUnsupportedProvider: "Этот плагин не умеет переносить чат этого провайдера на другой аккаунт",
   switchNotLoggedIn: "В директорию этого аккаунта ещё никто не вошёл",
   switchFirstTurn: "Первый ход этого чата ещё не сохранён, и перезапуск сейчас потеряет разговор. Дождись первого ответа, потом переключай.",
   switchUnknownAccount: "Этого аккаунта больше нет в списке",
+  switchUnknownChat: "У Paseo нет чата с таким id",
+  switchArchived: "Этот чат в архиве, и перезапуск вернул бы его из архива",
+  switchProviderMismatch: "Этот аккаунт другого провайдера, чем чат",
+  switchNotApplied: "Чат перезапустился, но не взял этот аккаунт, поэтому остаётся прежний",
   switchBusy: "Это прервёт текущий ход. Нажми ещё раз, чтобы всё равно переключиться.",
   pillAgentUnknown: "Пока не вижу этот чат.",
   pillLoadFailed: "Не удалось загрузить аккаунты.",
@@ -325,6 +343,8 @@ const ru: Strings = {
   refuseNotSet: "У этого чата нет аккаунта Claude: в {dir} никто не вошёл, а аккаунт по умолчанию не задан. Выбери его в разделе Настройки → Плагины → Claude Accounts или войди на экране аккаунтов.",
   refuseNoAccounts: "У этого чата нет аккаунта Claude: в {dir} никто не вошёл, и ни одного аккаунта не добавлено. Войди в один на экране аккаунтов и выбери его в разделе Настройки → Плагины → Claude Accounts.",
   pillUnread: "…",
+  pillFiveHourTag: "5ч",
+  pillSevenDayTag: "7д",
   deleteAccount: "Удалить",
   deleteConfirm: "Убрать аккаунт из списка? Папка и вход останутся.",
   deleteSuggestionConfirm: "Скрыть из списка? Папка и вход останутся.",
@@ -401,10 +421,14 @@ const uk: Strings = {
   switchTo: "Перемкнутися на",
   switchPaseoMissing: "Не знайшов команду paseo, щоб перезапустити сесію",
   switchMissingDirectory: "Директорії цього акаунта більше немає",
-  switchUnsupportedProvider: "Цей акаунт для провайдера, якого плагін поки не веде",
+  switchUnsupportedProvider: "Цей плагін не вміє переносити чат цього провайдера на інший акаунт",
   switchNotLoggedIn: "До директорії цього акаунта ще ніхто не увійшов",
   switchFirstTurn: "Перший хід цього чату ще не збережено, і перезапуск зараз втратить розмову. Дочекайся першої відповіді, потім перемикай.",
   switchUnknownAccount: "Цього акаунта більше немає у списку",
+  switchUnknownChat: "У Paseo немає чату з таким id",
+  switchArchived: "Цей чат в архіві, і перезапуск повернув би його з архіву",
+  switchProviderMismatch: "Цей акаунт іншого провайдера, ніж чат",
+  switchNotApplied: "Чат перезапустився, але не взяв цей акаунт, тому лишається попередній",
   switchBusy: "Це перерве поточний хід. Натисни ще раз, щоб усе одно перемкнути.",
   pillAgentUnknown: "Поки не бачу цей чат.",
   pillLoadFailed: "Не вдалося завантажити акаунти.",
@@ -441,6 +465,8 @@ const uk: Strings = {
   refuseNotSet: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, а акаунт за замовчуванням не задано. Обери його в розділі Налаштування → Плагіни → Claude Accounts або увійди на екрані акаунтів.",
   refuseNoAccounts: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, і жодного акаунта не додано. Увійди в один на екрані акаунтів і обери його в розділі Налаштування → Плагіни → Claude Accounts.",
   pillUnread: "…",
+  pillFiveHourTag: "5г",
+  pillSevenDayTag: "7д",
   deleteAccount: "Видалити",
   deleteConfirm: "Прибрати акаунт зі списку? Тека й вхід залишаться.",
   deleteSuggestionConfirm: "Сховати зі списку? Тека й вхід залишаться.",

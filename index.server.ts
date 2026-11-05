@@ -35,19 +35,27 @@ import { defaultPreferences, preferences } from "./shared/settings.ts";
 import { claudeProvidersRpc, pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
 import { workspaceStateRpc } from "./shared/workspace.ts";
 import { ACCOUNT_RESOURCE, accountSearchRpc } from "./shared/attach.ts";
-import { loginLabel } from "./shared/identity.ts";
+import { loginKey, loginLabel } from "./shared/identity.ts";
+import type { Identity } from "./shared/parse.ts";
+import { judgeApplied } from "./server/applied.ts";
 import { createApiKeyCheck } from "./server/apiKey.ts";
-import { chatRpc, describeAccounts, describeRpc, readChat } from "./server/capabilities.ts";
+import { bounded } from "./server/bounded.ts";
+import { chatRpc, describeAccounts, describeRpc, moveCheckRpc } from "./server/capabilities.ts";
+import { type ChatFacts, readChatAccount, resolveChatAccount, toChatFacts } from "./server/chatAccount.ts";
 import { checkDefault, defaultOptions } from "./server/defaults.ts";
 import { createFamilies } from "./server/families.ts";
 import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } from "./server/discover.ts";
 import { ACCOUNT_VAR, directoryExists, sessionEnv, withAskedAccount } from "./server/hook.ts";
 import { openLogin } from "./server/login.ts";
+import { createChatLimits } from "./server/chatLimits.ts";
+import { usedSummary } from "./server/limits.ts";
 import { migrateFromTokens } from "./server/migrate.ts";
+import { readMoveCheck } from "./server/moveCheck.ts";
 import { createOverview, createUsageRow } from "./server/overview.ts";
 import { pillStateFor } from "./server/pill.ts";
-import { createProfiles } from "./server/profile.ts";
-import { createSessionDirs } from "./server/sessionDir.ts";
+import { createProfiles, ownLogin } from "./server/profile.ts";
+import { type CliProvider, createSessionDirs } from "./server/sessionDir.ts";
+import { createSessionLedger } from "./server/sessionLedger.ts";
 import { createProjects } from "./server/projects.ts";
 import { reloadAgent } from "./server/reload.ts";
 import { createSerial } from "./server/serial.ts";
@@ -69,6 +77,9 @@ export default function contribute(server: PluginServerContext) {
   const overridingVar = createApiKeyCheck();
   const sessionDir = createSessionDirs();
   const families = createFamilies();
+  // What the session-open hook gave each chat the last time it opened: the one thing that says
+  // which account a restarted session took before its process exists.
+  const ledger = createSessionLedger();
 
   // One-time upgrade from 0.1.x: delete the old switching keys and drop their registry fields.
   void migrateFromTokens(STATE_FILE, log);
@@ -225,6 +236,49 @@ export default function contribute(server: PluginServerContext) {
     }
   }
 
+  /** The chat with exactly this id as Paseo has it, or null. */
+  const chatLookup = async (paseo: PaseoApi, agentId: string): Promise<ChatFacts | null> =>
+    toChatFacts(await paseo.agents.ref(agentId).refresh().catch(() => null), agentId);
+
+  /** Whether restarting the chat now would lose it: its first turn is not on disk yet. */
+  const unsavedOf = (paseo: PaseoApi) => (agentId: string, chat: ChatFacts | null) =>
+    chat === null
+      ? Promise.resolve(false)
+      : unsavedSession({ provider: chat.provider, sessionId: chat.sessionId, createdAt: chat.createdAt }, transcriptCheck(paseo, agentId));
+
+  /** What the resolver reads to tell which account a chat is on. */
+  const resolveDeps = {
+    readRegistry,
+    live: (agentId: string, provider: CliProvider) => sessionDir(agentId, { provider }),
+    ledger: (agentId: string) => ledger.last(agentId),
+    defaultDir,
+  };
+
+  /** Whose login an account holds, from Anthropic and not from the cache a chat rewrites. Bounded:
+   *  a slow Keychain or `claude` must not hold a read that a person is waiting on. */
+  const identityOf = (account: Account, refresh = false): Promise<Identity | null> =>
+    bounded(
+      discovery
+        .identify(account.home, refresh)
+        .then((discovered) => ownLogin(account, discovered, (home) => profiles.identityOf(home, defaultDir(), { refresh }))),
+      IDENTITY_READ_MS,
+      null,
+    );
+
+  /** Other registered directories logged in to the same account, the way the Accounts screen
+   *  groups them: same email under the same organisation. */
+  async function sameLogin(account: Account): Promise<Account[]> {
+    const mine = await identityOf(account);
+    if (mine === null || mine.email === "") return [];
+    const key = loginKey(mine, account.home);
+    const others = (await readRegistry()).accounts.filter((other) => other.provider === account.provider && other.id !== account.id);
+    const known = await Promise.all(others.map(async (other) => ({ other, who: await identityOf(other) })));
+    return known.filter(({ other, who }) => who !== null && loginKey(who, other.home) === key).map(({ other }) => other);
+  }
+
+  /** The allowance of the account a chat runs on, and how old it is. */
+  const limitsOf = createChatLimits({ usage, defaultDir, siblings: sameLogin, readMs: LIMITS_READ_MS });
+
   server.handle(listAccounts, async (input, { paseo }) => {
     const [overview, override] = await Promise.all([overviewFor(paseo, input.refresh, input.force), overridingVar(paseo)]);
     // Under Auto there is no default account to badge; the one Auto would pick now is shown.
@@ -308,21 +362,30 @@ export default function contribute(server: PluginServerContext) {
       {
         readRegistry,
         writeRegistry: persist,
+        // Through the queue the hook writes by, so a chat bound during the restart is not lost.
+        update,
         exists: directoryExists,
         identify: (home) => discovery.identify(home),
+        chat: (agentId) => chatLookup(paseo, agentId),
+        unsaved: unsavedOf(paseo),
         reload: (agentId) => reloadAgent(agentId),
-        unsaved: async (agentId) => {
-          const found = await paseo.agents.ref(agentId).refresh().catch(() => null);
-          if (found === null) return false;
-          const { agent } = found;
-          const provider = (await families.of(paseo, agent.provider))?.family ?? agent.provider;
-          const session = { provider, sessionId: agent.persistence?.sessionId ?? null, createdAt: agent.createdAt };
-          return unsavedSession(session, transcriptCheck(paseo, agentId));
-        },
+        // Right after a restart there may be no process yet, so the hook's own record counts first.
+        verify: async (_chat, target, since) =>
+          judgeApplied({
+            record: ledger.last(input.agentId),
+            live: await sessionDir(input.agentId, { provider: target.provider, fresh: true }),
+            provider: target.provider,
+            target,
+            defaultDir: defaultDir(),
+            since,
+          }),
       },
     );
     // The popover has closed by the time this answers; the log keeps the reason.
     if (result.code !== "") log(`accounts: switching ${input.agentId} to ${input.account} failed (${result.code}) ${result.error}`.trimEnd());
+    else if (result.applied === "pending" || result.applied === "unverified") {
+      log(`accounts: switching ${input.agentId} to ${input.account} is ${result.applied}`);
+    }
     return result;
   });
 
@@ -390,7 +453,28 @@ export default function contribute(server: PluginServerContext) {
   // For God Mode: what an assistant outside Paseo may read and do here, and the chat a switch
   // would restart, so its confirmation names the chat rather than an id.
   server.handle(describeRpc, () => describeAccounts());
-  server.handle(chatRpc, (input, { paseo }) => readChat(input.agentId, (id) => paseo.agents.ref(id).refresh()));
+  server.handle(chatRpc, (input, { paseo }) =>
+    readChatAccount(input, {
+      ...resolveDeps,
+      chat: (agentId) => chatLookup(paseo, agentId),
+      identity: (account) => identityOf(account, input.force),
+      limits: limitsOf,
+    }),
+  );
+  server.handle(moveCheckRpc, (input, { paseo }) =>
+    readMoveCheck(
+      { agentId: input.agentId, accountId: input.account },
+      {
+        readRegistry,
+        chat: (agentId) => chatLookup(paseo, agentId),
+        exists: directoryExists,
+        identify: (home) => discovery.identify(home),
+        unsaved: unsavedOf(paseo),
+        current: (chat) => resolveChatAccount(chat, resolveDeps),
+        identity: (account) => identityOf(account),
+      },
+    ),
+  );
 
   // The pill's chats: Claude's own and those of every profile extending it.
   server.handle(claudeProvidersRpc, async (_input, { paseo }) => {
@@ -426,6 +510,7 @@ export default function contribute(server: PluginServerContext) {
       refusalText: (code: RefusalCode, values) => refusalText(strings, code, values),
       log,
     });
+    ledger.note(input.request, env);
     return env === undefined ? undefined : { ...input.request, env };
   });
 
@@ -455,12 +540,11 @@ export default function contribute(server: PluginServerContext) {
       },
       ...rows.map((row) => {
         const name = loginLabel({ email: row.email, orgName: row.orgName, plan: "" }, row.label);
-        const used = [row.fiveHour, row.sevenDay].map((bar) => (bar === null ? "–" : `${Math.round(bar.utilization)}%`));
         return {
           id: row.switchTo,
           identifier: row.label,
           title: name,
-          subtitle: `${strings.fiveHourUsage} ${used[0]} · ${strings.sevenDayUsage} ${used[1]}`,
+          subtitle: usedSummary(row.fiveHour, row.sevenDay, strings),
           url: USAGE_URL,
           // The label rather than the login: this text goes into the chat's prompt.
           text: strings.attachAccountText.replace("{label}", row.label),
@@ -512,3 +596,8 @@ const USAGE_URL = "https://claude.ai/settings/usage";
 
 /** How long an automatic pick waits on one account before treating its allowance as unknown. */
 const AUTO_READ_MS = 3_000;
+
+/** How long a chat's account waits for whose login it holds, and for one reading of its
+ *  allowance, before answering with what it has. A plugin call is abandoned at 30 s. */
+const IDENTITY_READ_MS = 4_000;
+const LIMITS_READ_MS = 9_000;

@@ -4,9 +4,10 @@ Run [Paseo](https://paseo.sh) chats on several Claude subscriptions, and move a 
 account while it is open. When one account hits its limit, pick another from the pill above the
 composer: the session restarts on that account and the conversation carries on.
 
-- **Composer pill.** Shows which account the chat runs on and how full its 5-hour window is (once
-  either window is exhausted, the time until it resets). Press it to see every account's 5-hour
-  and weekly allowance and switch the chat.
+- **Composer pill.** Shows which account the chat runs on and how full its 5-hour window is:
+  `5h 18%`. An account with no 5-hour window (Ultra) shows its week instead: `7d 62%`. Once either
+  window is exhausted it shows the time until it resets. Press it to see every account's allowance
+  and switch the chat.
 - **Accounts screen.** Every Claude login on the machine, grouped by subscription, with usage bars,
   login buttons and "Add account".
 - **Per chat.** A switch moves one chat. Other chats, even in the same project, stay where they are.
@@ -87,7 +88,17 @@ read from, so the meter and the chat can never drift onto different accounts. Ch
 switched are left alone.
 
 If the restart fails, the choice is rolled back, so the pill never shows an account the chat is not
-actually running on.
+actually running on. Only that chat's choice is put back, and only if it is still the one written
+for this switch, so a chat bound or moved meanwhile keeps its account.
+
+**Which account a chat is really on.** The plugin does not trust a single record. It looks, in this
+order, at the chat's running `claude` process (the `CLAUDE_SECURESTORAGE_CONFIG_DIR` it was started
+with names the login it bills; a process started by the chat, such as Docker or a dev server, is
+not the chat's session and is ignored), then at what the `agent.session_open` hook gave the session
+the last time it opened (Claude Code only starts with the chat's next turn, so right after a restart
+there is no process yet), then at the account on record for the chat. Where these disagree the
+stronger one wins and the disagreement is named. A chat with none of them has no known account: the
+default account is for new chats and is never put in its place.
 
 **Which account a new chat opens on.** A new chat is placed once, before Claude Code starts, so
 it never has to be switched (and restarted) on its first turn. In order:
@@ -152,10 +163,21 @@ In Paseo's settings, under **Accounts**:
 ## From ChatGPT
 
 With [Paseo God Mode](https://github.com/devXpro/paseo-god-mode-plugin) 0.10 or newer, ChatGPT can
-read the accounts and their usage, have usage measured now, and move one chat or every chat to an
-account. The plugin describes this itself through `meta.describe` (`paseo.capabilities/1`). Both
-moves are read back to you before they run, naming the chat from Paseo's own data, and a refused
-switch is reported as not done. Adding, deleting and logging in are not offered.
+read the accounts and their usage, have usage measured now, tell which account any chat really runs
+on, and move one chat or every chat to an account. The plugin describes this itself through
+`meta.describe` (`paseo.capabilities/1`); God Mode needs no change.
+
+| Operation | What it does |
+|---|---|
+| `accounts`, `accounts_fresh` | Every login with its 5-hour and weekly allowance, from the cache or measured now. |
+| `chat_account`, `chat_account_fresh` | For one chat, by its full id: the account it runs on (id, label, email, organisation, plan), what that rests on (`basis`: process, session, binding or none) and where the sources disagree (`note`), and that account's 5-hour and weekly windows: percent used and left, when each resets, and how old the numbers are (`usageAgeSeconds`, `usageStale`, `usageHeldSeconds` while the usage endpoint rate-limits). |
+| `chat_move_check` | A dry run of a move that changes nothing: the chat, the account it is on, the account it would move to, and why it cannot (`unknown-chat`, `archived`, `provider-mismatch`, `unsupported-provider`, `unknown-account`, `not-logged-in`, `missing-directory`, `first-turn`). |
+| `switch_chat` | Moves one chat. Confirmed first against the dry run, and reported with `from`, `to`, `interrupted` and `applied` (`verified`, `next-open`, `pending`, `unverified`). |
+| `switch_all` | Moves every chat to an account and makes it the default. |
+
+Moves are read back to you before they run, naming the chat from Paseo's own data and the accounts
+from the plugin's, and a refused switch is reported as not done. Adding, deleting and logging in are
+not offered.
 
 ## Limitations
 
@@ -167,6 +189,15 @@ switch is reported as not done. Adding, deleting and logging in are not offered.
   found"). Only chats created in the last ten minutes are checked, so a wrong refusal lasts ten
   minutes at most; a chat left empty for longer before its first message is not protected.
   "Move all chats here" skips such chats.
+- **One Claude chat moves at a time; a single Codex chat does not.** A Codex session keeps its
+  history in the folder it runs in, so pointing one chat at another account's folder would leave the
+  conversation behind. An archived chat is not moved either, since a restart would bring it back from
+  the archive. A closed chat only gets its new account written down and takes it when it next opens
+  (`applied: next-open`).
+- **A switch waits for the restart for 25 seconds.** Paseo gives a plugin call 30. A restart still
+  running then is answered `pending` and its choice kept; `chat_account` shows where the chat
+  ended up. A switch also checks, from the hook's record, that the new session was given the
+  account; one that was not is reported `not-applied` and its choice is put back.
 - **A switched chat shares the account's rotating login.** It is the same login the directory uses,
   refreshed in place, so chats never fight over a copied token — but logging that account out (or
   renaming its folder) logs out every chat on it until it logs in again.
