@@ -22,6 +22,8 @@ export interface ChatFacts {
   /** The provider session Paseo has recorded, or null before the chat ever started. */
   sessionId: string | null;
   createdAt: string | null;
+  /** The config directory the chat's profile pins, where it runs unless moved. */
+  pinnedDir?: string | null;
 }
 
 /** What Paseo answers about one agent; `paseo.agents.ref(id).refresh()` fits it. */
@@ -62,6 +64,23 @@ export function toChatFacts(found: ChatLookup | null, agentId: string): ChatFact
   };
 }
 
+/**
+ * The same, with the chat's provider told by `family`. A profile's chat runs the same CLI on the
+ * same accounts as the provider it extends, so every account question treats it as that
+ * provider's own: resolving it, moving it, guarding its first turn. `family` answers null for a
+ * provider that extends none of ours.
+ */
+export async function chatFactsOf(
+  found: ChatLookup | null,
+  agentId: string,
+  family: (provider: string) => Promise<{ family: string; configDir: string | null } | null>,
+): Promise<ChatFacts | null> {
+  const chat = toChatFacts(found, agentId);
+  if (chat === null) return null;
+  const resolved = await family(chat.provider);
+  return resolved === null ? chat : { ...chat, provider: resolved.family, pinnedDir: resolved.configDir };
+}
+
 /** What the chat is doing, as a listener hears it. */
 export function turnOf(chat: ChatFacts): "running" | "idle" | "closed" {
   if (chat.busy) return "running";
@@ -96,7 +115,8 @@ export interface ResolveDeps {
  * 1. its running CLI process, whose environment names the login it uses;
  * 2. the hook's record of how its session was last opened (there is no process yet right after a
  *    restart, since Claude Code starts with the chat's next turn);
- * 3. the account on record for it, which is where its next start will land.
+ * 3. the account on record for it, which is where its next start will land;
+ * 4. the directory its profile pins, where it opens when nobody has moved it.
  *
  * Where these differ, the stronger one wins and the note says so. An unbound chat with none of
  * them has no account: the provider's default is for new chats and is never put in its place.
@@ -114,6 +134,7 @@ export async function resolveChatAccount(chat: ChatFacts, deps: ResolveDeps): Pr
     registry.accounts.find((account) => account.provider === provider && canonical(account.home) === canonical(dir)) ?? null;
   const dirOfInjected = (injected: string) => (injected === "" ? defaultDir : injected);
   const notes: string[] = [];
+  const pinned = chat.pinnedDir == null ? null : accountAt(chat.pinnedDir);
 
   const live = await deps.live(chat.id, provider);
   const record = deps.ledger(chat.id);
@@ -138,6 +159,7 @@ export async function resolveChatAccount(chat: ChatFacts, deps: ResolveDeps): Pr
 
   if (record !== undefined) {
     if (record.injected === undefined) {
+      if (pinned !== null && bound === "") return { basis: "session", account: pinned, bound, note: "" };
       const said = bound === "" ? "" : ` (the binding says ${bound})`;
       return {
         basis: "none",
@@ -163,6 +185,10 @@ export async function resolveChatAccount(chat: ChatFacts, deps: ResolveDeps): Pr
       return { basis: "none", account: null, bound, note: `the binding names ${account.id}, an account of another provider, which the hook ignores` };
     }
     return { basis: "binding", account, bound, note: `no session of this chat is running; it will open on ${account.id}` };
+  }
+
+  if (pinned !== null) {
+    return { basis: "binding", account: pinned, bound, note: `no session of this chat is running; its profile opens it on ${pinned.id}` };
   }
 
   return {

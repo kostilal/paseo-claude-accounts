@@ -78,8 +78,8 @@ export interface Strings {
   refuseNotSet: string;
   refuseNoAccounts: string;
   pillUnread: string;
-  /** Before the pill's percentage, naming its window. Short, and the same width: the pill
-   *  sits above the composer on a phone too. */
+  /** Before the pill's percentage, naming its window. Short: the pill sits above the composer
+   *  on a phone too. */
   pillFiveHourTag: string;
   pillSevenDayTag: string;
   /** Delete only forgets: every confirm says the folder and login stay. */
@@ -465,7 +465,7 @@ const uk: Strings = {
   refuseNotSet: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, а акаунт за замовчуванням не задано. Обери його в розділі Налаштування → Плагіни → Claude Accounts або увійди на екрані акаунтів.",
   refuseNoAccounts: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, і жодного акаунта не додано. Увійди в один на екрані акаунтів і обери його в розділі Налаштування → Плагіни → Claude Accounts.",
   pillUnread: "…",
-  pillFiveHourTag: "5г",
+  pillFiveHourTag: "5год",
   pillSevenDayTag: "7д",
   deleteAccount: "Видалити",
   deleteConfirm: "Прибрати акаунт зі списку? Тека й вхід залишаться.",

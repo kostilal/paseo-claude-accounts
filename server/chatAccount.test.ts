@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Identity } from "../shared/parse.ts";
 import type { Registry } from "../shared/registry.ts";
-import { type ChatFacts, type ResolveDeps, readChatAccount, resolveChatAccount, toChatFacts } from "./chatAccount.ts";
+import { type ChatFacts, type ResolveDeps, chatFactsOf, readChatAccount, resolveChatAccount, toChatFacts } from "./chatAccount.ts";
 import type { LimitsView } from "./limits.ts";
 import type { SessionDir } from "./sessionDir.ts";
 import type { OpenRecord } from "./sessionLedger.ts";
@@ -47,6 +47,58 @@ function resolveDeps(options: { registry?: Partial<Registry>; live?: SessionDir;
 }
 
 const record = (injected: string | undefined): OpenRecord => ({ at: 1_500, reason: "refresh", provider: "claude", injected });
+
+// ---- a chat of a profile -----------------------------------------------------------------------
+
+const claudeFamily = async (provider: string) =>
+  provider === "claude-work" ? { family: "claude", configDir: one.home } : provider === "claude" ? { family: "claude", configDir: null } : null;
+
+test("a profile's chat is told as the provider it extends, and any other keeps its own", async () => {
+  const lookup = (provider: string) => ({
+    agent: { id: "ag1", provider, cwd: "/Users/me/shop", title: null, status: "idle" },
+    project: null,
+  });
+  assert.equal((await chatFactsOf(lookup("claude-work"), "ag1", claudeFamily))?.provider, "claude");
+  assert.equal((await chatFactsOf(lookup("opencode"), "ag1", claudeFamily))?.provider, "opencode");
+  assert.equal(await chatFactsOf(lookup("claude-work"), "other", claudeFamily), null);
+  assert.equal(await chatFactsOf(null, "ag1", claudeFamily), null);
+});
+
+test("a closed profile chat nobody moved is on the account its profile pins, as the pill says", async () => {
+  const facts = chat({ pinnedDir: `${one.home}/` });
+  const resolved = await resolveChatAccount(facts, resolveDeps());
+  assert.equal(resolved.basis, "binding");
+  assert.equal(resolved.account?.id, "account-1");
+
+  const left = await resolveChatAccount(facts, resolveDeps({ record: record(undefined) }));
+  assert.equal(left.basis, "session");
+  assert.equal(left.account?.id, "account-1");
+});
+
+test("a binding outranks the pin, and a pin nobody registered tells nothing", async () => {
+  const moved = await resolveChatAccount(chat({ pinnedDir: one.home }), resolveDeps({ registry: { agents: { ag1: "account-5" } } }));
+  assert.equal(moved.account?.id, "account-5");
+
+  const unknown = await resolveChatAccount(chat({ pinnedDir: "/Users/me/.claude-elsewhere" }), resolveDeps());
+  assert.equal(unknown.basis, "none");
+  assert.equal(unknown.account, null);
+});
+
+test("a profile's running chat is resolved from its process, which pins the profile's directory", async () => {
+  const found = await chatFactsOf(
+    { agent: { id: "ag1", provider: "claude-work", cwd: "/Users/me/shop", title: null, status: "idle" }, project: null },
+    "ag1",
+    claudeFamily,
+  );
+  const asked: unknown[] = [];
+  const resolved = await resolveChatAccount(
+    found!,
+    resolveDeps({ asked, live: { found: true, configDir: one.home } }),
+  );
+  assert.deepEqual(asked, [["ag1", "claude"]]);
+  assert.equal(resolved.basis, "process");
+  assert.equal(resolved.account?.id, "account-1");
+});
 
 // ---- what Paseo says about a chat -------------------------------------------------------------
 

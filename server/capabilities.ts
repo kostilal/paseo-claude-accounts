@@ -96,6 +96,7 @@ export const chatRpc = defineRpc({
     /** `running`: a turn is in progress. `idle`. `closed`: no session is open. "" for no chat. */
     turn: z.string(),
     archived: z.boolean(),
+    /** A profile's chat says the provider it extends: that is whose accounts it can move to. */
     provider: z.string(),
     /** The registry id of the account the chat runs on; "" when that cannot be told. Never the
      *  default account standing in for an unknown one. */
@@ -213,7 +214,7 @@ export const OPERATIONS: AccountsOperation[] = [
     fixed: { refresh: false, force: false },
     title: "Claude accounts and their usage",
     description:
-      "One row per login on this Mac. name: the account's label; email, orgName, subscriptionType: whose login and which plan; isDefault: new chats open on it; usage: ok, expired, unauthorised, none, error or unsupported, with fiveHour (null with ok: no limit) and sevenDay: percent used and reset time. switchTo is the account to switch to, empty when nobody is logged in to it. Usage may be ten minutes old. error claude-not-found: no claude command. overridingVar: a variable that makes switching useless. To know which account a CHAT uses, read chat_account: isDefault only says where new chats open.",
+      "One row per login on this Mac. name: the account's label; email, orgName, subscriptionType: whose login and which plan; isDefault: new chats open on it; usage: ok, expired, unauthorised, none, error or unsupported, with fiveHour (null with ok: none reported) and sevenDay: percent used, reset time. switchTo is the account to switch to, empty when nobody is logged in to it. Usage may be ten minutes old. error claude-not-found: no claude command. overridingVar: a variable that makes switching useless. To know which account a CHAT uses, read chat_account: isDefault only says where new chats open.",
     input: none,
     fields: OVERVIEW_FIELDS,
   },
@@ -235,7 +236,7 @@ export const OPERATIONS: AccountsOperation[] = [
     fixed: { force: false },
     title: "Which account a chat runs on, and its limits",
     description:
-      "Which account one chat really runs on, and what is left of its allowance. account is empty when it cannot be told: never assume the default account. basis: process (running now), session (last opened on), binding (will open on), none. note says where sources disagree. usageAgeSeconds, usageStale: how old the numbers are. fiveHour, sevenDay: utilization and left in percent, resetsAt, resetsIn; with usage ok, a null fiveHour means no 5-hour limit. usageHeldSeconds: rate-limited, the old numbers are kept. usage unauthorised: allow the Keychain read once on the Mac. Only the full chat id works.",
+      "Which account one chat really runs on, and what is left of its allowance. account is empty when it cannot be told: never assume the default account. basis: process (running now), session (last opened on), binding (will open on), none. note says where sources disagree. usageAgeSeconds, usageStale: how old the numbers are. fiveHour, sevenDay: utilization and left in percent, resetsAt, resetsIn; with usage ok, a null fiveHour means none reported. usageHeldSeconds: rate-limited, the old numbers are kept. usage unauthorised: allow the Keychain read once on the Mac. Only the full chat id works.",
     input: z.object({ agentId }),
     fields: CHAT_ACCOUNT_FIELDS,
     outcome: { error: "error" },

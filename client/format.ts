@@ -18,15 +18,15 @@ export function tightestOf(fiveHour: Window | null, sevenDay: Window | null): nu
   return values.length === 0 ? null : Math.max(...values);
 }
 
-/** Milliseconds until the earliest exhausted window resets, or null when nothing is
- *  exhausted. A reset already in the past returns 0. */
+/** Milliseconds until an exhausted account can be used again: the latest reset among its
+ *  exhausted windows. Null when nothing is exhausted, or when an exhausted window has no readable
+ *  reset time, so no wait can be promised. A reset already in the past returns 0. */
 export function exhaustedResetIn(fiveHour: Window | null, sevenDay: Window | null, now: number): number | null {
-  const waits = [fiveHour, sevenDay]
+  const resets = [fiveHour, sevenDay]
     .filter((bar): bar is Window => bar !== null && bar.utilization >= EXHAUSTED_AT)
-    .map((bar) => Date.parse(bar.resetsAt))
-    .filter((at) => Number.isFinite(at))
-    .map((at) => Math.max(0, at - now));
-  return waits.length === 0 ? null : Math.min(...waits);
+    .map((bar) => Date.parse(bar.resetsAt));
+  if (resets.length === 0 || resets.some((at) => !Number.isFinite(at))) return null;
+  return Math.max(0, Math.max(...resets) - now);
 }
 
 /** The coarsest useful unit. Rounds up to at least one minute, since a reset seconds away
@@ -47,8 +47,8 @@ export function formatWait(ms: number, strings: Strings): string {
  * neither is known.
  */
 function pillWindow({ fiveHour, sevenDay }: PillAccount): "fiveHour" | "sevenDay" | null {
-  // Utilization itself, not exhaustedResetIn: that one skips a window whose reset time is
-  // unknown, and an exhausted week without one would read as a roomy 5 hours.
+  // Utilization itself, not exhaustedResetIn, which has no answer without a reset time: an
+  // exhausted week without one would read as a roomy 5 hours.
   const weekGone = sevenDay !== null && sevenDay.utilization >= EXHAUSTED_AT;
   if (fiveHour !== null && !weekGone) return "fiveHour";
   return sevenDay !== null ? "sevenDay" : null;

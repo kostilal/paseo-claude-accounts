@@ -38,6 +38,24 @@ test("an exhausted window reports the time until it resets", () => {
   assert.equal(exhaustedResetIn({ utilization: 94, resetsAt: "2026-09-16T12:47:00Z" }, null, now), null);
 });
 
+test("with both windows exhausted the wait is until the account can be used again", () => {
+  const both = account({
+    fiveHour: { utilization: 100, resetsAt: "2026-09-16T12:47:00Z" },
+    sevenDay: { utilization: 100, resetsAt: "2026-09-19T12:00:00Z" },
+  });
+  assert.equal(pillFigure(both, now, strings), "3 д");
+  assert.equal(usageLine(both, now, strings), `Claude · ${strings.limitExhausted} · ${strings.resetIn} 3 д`);
+});
+
+test("an exhausted window with no reset time promises no wait", () => {
+  const both = account({
+    fiveHour: { utilization: 100, resetsAt: "2026-09-16T12:47:00Z" },
+    sevenDay: { utilization: 100, resetsAt: "" },
+  });
+  assert.equal(exhaustedResetIn(both.fiveHour, both.sevenDay, now), null);
+  assert.equal(pillFigure(both, now, strings), "7д 100%");
+});
+
 test("a wait is shown in the coarsest unit that still says something", () => {
   assert.equal(formatWait(47 * 60_000, strings), "47 мин");
   assert.equal(formatWait(3 * 3_600_000, strings), "3 ч");
@@ -85,7 +103,7 @@ test("the pill tag names the window in every language", () => {
   const weekOnly = account({ fiveHour: null });
   assert.equal(pillFigure(account(), now, t("en")), "5h 18%");
   assert.equal(pillFigure(weekOnly, now, t("en")), "7d 62%");
-  assert.equal(pillFigure(account(), now, t("uk")), "5г 18%");
+  assert.equal(pillFigure(account(), now, t("uk")), "5год 18%");
   assert.equal(pillFigure(weekOnly, now, t("uk")), "7д 62%");
 });
 

@@ -179,3 +179,137 @@ test("a stop before the list answers still releases the subscription it gets", a
   assert.equal(created.length, 0);
   assert.equal(agents.released(), 1);
 });
+
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test("chats of a profile extending Claude get a pill, listed or reported later", async () => {
+  const { attach, created } = stubAttach();
+  const agents = fakeAgents([
+    { agent: { id: "a", workspaceId: "w", provider: "claude-work" } },
+    { agent: { id: "x", workspaceId: "w", provider: "codex" } },
+  ]);
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }), async () => ["claude", "claude-work"]);
+  await settle();
+  assert.equal(created.length, 1);
+  agents.emit({ kind: "upsert", agent: { id: "b", workspaceId: "w", provider: "claude-work" } });
+  assert.equal(created.length, 2);
+  stop();
+});
+
+test("a provider first seen later is asked about once, so a profile added meanwhile gets pills", async () => {
+  const { attach, created } = stubAttach();
+  const agents = fakeAgents([]);
+  let asks = 0;
+  const known = ["claude"];
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }), async () => {
+    asks += 1;
+    return [...known];
+  });
+  await settle();
+  known.push("claude-new");
+  agents.emit({ kind: "upsert", agent: { id: "n", workspaceId: "w", provider: "claude-new" } });
+  await settle();
+  assert.equal(created.length, 1);
+  agents.emit({ kind: "upsert", agent: { id: "o", workspaceId: "w", provider: "opencode" } });
+  agents.emit({ kind: "upsert", agent: { id: "p", workspaceId: "w", provider: "opencode" } });
+  await settle();
+  assert.equal(asks, 3, "once at start, once per provider not named before");
+  assert.equal(created.length, 1);
+  stop();
+});
+
+test("when the providers cannot be asked, Claude's own chats still get a pill", async () => {
+  const { attach, created } = stubAttach();
+  const agents = fakeAgents([
+    { agent: { id: "a", workspaceId: "w", provider: "claude" } },
+    { agent: { id: "b", workspaceId: "w", provider: "claude-work" } },
+  ]);
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }), async () => Promise.reject(new Error("rpc down")));
+  await settle();
+  assert.equal(created.length, 1);
+  stop();
+});
+
+test("a failed providers answer is asked again, so an idle profile chat still gets its pill", async () => {
+  const { attach, created } = stubAttach();
+  const agents = fakeAgents([{ agent: { id: "a", workspaceId: "w", provider: "claude-work" } }]);
+  let asks = 0;
+  const providers = async () => {
+    asks += 1;
+    if (asks === 1) throw new Error("the plugin is reloading");
+    return ["claude", "claude-work"];
+  };
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }), providers, 1);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(asks, 2);
+  assert.equal(created.length, 1);
+  stop();
+});
+
+test("stopping ends the asking", async () => {
+  const { attach } = stubAttach();
+  const agents = fakeAgents([]);
+  let asks = 0;
+  const providers = async () => {
+    asks += 1;
+    throw new Error("down");
+  };
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }), providers, 1);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  stop();
+  const before = asks;
+  assert.ok(before >= 1);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(asks, before);
+});
+
+test("a providers answer that never comes does not hold back Claude's own pills", async () => {
+  const { attach, created } = stubAttach();
+  const agents = fakeAgents([{ agent: { id: "a", workspaceId: "w", provider: "claude" } }]);
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }), () => new Promise<string[]>(() => {}));
+  await settle();
+  assert.deepEqual(agents.calls, [{ subscribe: {} }]);
+  agents.emit({ kind: "upsert", agent: { id: "b", workspaceId: "w", provider: "claude" } });
+  assert.equal(created.length, 2);
+  stop();
+});
+
+test("an agent removed before the providers answer is not brought back by the late seed", async () => {
+  const { attach, created } = stubAttach();
+  const agents = fakeAgents([{ agent: { id: "a", workspaceId: "w", provider: "claude-work" } }]);
+  let answer: (ids: string[]) => void = () => {};
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }), () => new Promise<string[]>((resolve) => (answer = resolve)));
+  await settle();
+  agents.emit({ kind: "remove", agentId: "a" });
+  answer(["claude", "claude-work"]);
+  await settle();
+  assert.equal(created.length, 0);
+  stop();
+});
+
+test("every profile chat reported before the providers answer gets its pill when they do", async () => {
+  const { attach, created } = stubAttach();
+  const agents = fakeAgents([
+    { agent: { id: "a", workspaceId: "w", provider: "claude-work" } },
+    { agent: { id: "b", workspaceId: "w", provider: "claude-work" } },
+  ]);
+  let answer: (ids: string[]) => void = () => {};
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }), () => new Promise<string[]>((resolve) => (answer = resolve)));
+  await settle();
+  agents.emit({ kind: "upsert", agent: { id: "a", workspaceId: "w", provider: "claude-work" } });
+  agents.emit({ kind: "upsert", agent: { id: "b", workspaceId: "w2", provider: "claude-work" } });
+  answer(["claude", "claude-work"]);
+  await settle();
+  assert.equal(created.length, 2);
+  stop();
+});
+
+test("an agent removed before the list answers is not attached from the list", async () => {
+  const { attach, created } = stubAttach();
+  const agents = fakeAgents([{ agent: { id: "a", workspaceId: "w", provider: "claude" } }]);
+  const stop = trackClaudeAgents(agents.api, createPillRegistry({ attach }));
+  agents.emit({ kind: "remove", agentId: "a" });
+  await settle();
+  assert.equal(created.length, 0);
+  stop();
+});

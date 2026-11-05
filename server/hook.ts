@@ -2,7 +2,8 @@ import { stat } from "node:fs/promises";
 import type { PluginSessionOpenRequest } from "@getpaseo/plugin/server";
 import { askedAccount } from "../shared/attach.ts";
 import type { RefusalCode } from "../shared/defaults.ts";
-import { PROVIDERS, envFor, isProviderId } from "../shared/providers.ts";
+import { canonical } from "../shared/path.ts";
+import { PROVIDERS, type ProviderFamily, envFor, familyOf, isProviderId } from "../shared/providers.ts";
 import {
   AUTO,
   type Account,
@@ -51,6 +52,9 @@ export interface HookDeps {
   /** Whether Auto's first pick in a workspace holds for the workspace's later chats (the
    *  "one account per task" setting). Absent: yes. */
   oneAccountPerWorkspace?(): Promise<boolean>;
+  /** What a provider that is not one of ours runs on: a profile extending one (see
+   *  `providerFamilies`), or null. Absent: such chats are left alone. */
+  family?(provider: string): Promise<ProviderFamily | null>;
   /** The message a refused chat shows. */
   refusalText?(code: RefusalCode, values: { label?: string; dir?: string }): string;
   log?(line: string): void;
@@ -111,23 +115,32 @@ export async function directoryExists(path: string): Promise<boolean> {
  *  A new chat is refused (`SessionRefused`) rather than started without a login: when the
  *  default is set but cannot be used (removed, no switching key, key rejected, directory
  *  gone), and when no default is set and the chat's own directory is known to be logged
- *  out. Anything else that cannot apply is a no-op: a session on the wrong account is a
+ *  out. Only a chat of ours: a profile may run on anything, whatever its env says, so its chat is
+ *  left to open its own way. Anything else that cannot apply is a no-op: a session on the wrong account is a
  *  nuisance, one that cannot start is worse. */
 export async function sessionEnv(
   request: SessionRequest,
   deps: HookDeps,
 ): Promise<Record<string, string> | undefined> {
-  if (!isProviderId(request.provider)) return undefined;
-  const provider = request.provider;
   const log = deps.log ?? ((line: string) => console.error(line));
   try {
+    const resolved = isProviderId(request.provider)
+      ? familyOf(request.provider, {})
+      : ((await deps.family?.(request.provider)) ?? null);
+    if (resolved === null) return undefined;
+    const provider = resolved.family;
     const registry = await deps.readRegistry();
     const bound = resolveAccount(registry, { agentId: request.agentId });
     if (bound !== null) return await accountEnv(bound, provider, request, deps);
     if (request.reason !== "create") return undefined;
+    if (resolved.configDir !== null) return await profileChatEnv(registry, provider, resolved.configDir, request, deps);
     return await newChatEnv(registry, provider, request, deps);
   } catch (error) {
     if (error instanceof SessionRefused) {
+      if (!isProviderId(request.provider)) {
+        log(`accounts: leaving the profile chat ${request.agentId} alone (${error.code})`);
+        return undefined;
+      }
       log(`accounts: refused to start ${request.agentId} (${error.code})`);
       throw error;
     }
@@ -135,6 +148,28 @@ export async function sessionEnv(
     log(`accounts: leaving the session alone: ${String(error)}`);
     return undefined;
   }
+}
+
+/** A new chat of a profile that pins its own config directory ("Claude (Work)" with
+ *  `CLAUDE_CONFIG_DIR=~/.claude-work`). Choosing the profile chose its login, so the chat opens
+ *  on the account registered for that directory and is bound to it, so the pill names it; an
+ *  account its environment asks for still wins. With neither, the chat opens the profile's way. */
+async function profileChatEnv(
+  registry: Registry,
+  provider: string,
+  configDir: string,
+  request: SessionRequest,
+  deps: HookDeps,
+): Promise<Record<string, string> | undefined> {
+  const asked = request.env[ACCOUNT_VAR]?.trim() ?? "";
+  if (asked !== "") return await newChatEnv(registry, provider, request, deps);
+  const dir = canonical(configDir);
+  const own = registry.accounts.find((account) => account.provider === provider && canonical(account.home) === dir) ?? null;
+  if (own === null) return undefined;
+  const env = await accountEnv(own, provider, request, deps);
+  if (env === undefined) return undefined;
+  await bindNewChat(own, provider, request, deps, "plain");
+  return env;
 }
 
 /** A new, unbound chat, in this order: the account its environment asks for, the workspace's
@@ -209,8 +244,9 @@ async function newChatEnv(
   }
 
   // No default, or nothing to pick: the chat runs on its own directory's login, which is fine
-  // when there is one.
-  if (provider !== "claude" || deps.ownLogin === undefined) return undefined;
+  // when there is one. Not asked for a profile: what it runs on cannot be told, and it is not
+  // refused either way.
+  if (provider !== "claude" || !isProviderId(request.provider) || deps.ownLogin === undefined) return undefined;
   const own = await deps.ownLogin(request);
   if (own.loggedIn !== false) return undefined;
   if (checked.state === "auto") throw refuse("auto-none", { dir: own.dir });

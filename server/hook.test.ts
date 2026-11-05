@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Registry } from "../shared/registry.ts";
+import { AUTO } from "../shared/registry.ts";
 import { SessionRefused, type SessionRequest, sessionEnv, withAskedAccount } from "./hook.ts";
 
 /** A default directory none of the test accounts live in, so a credential value is the account's
@@ -552,4 +553,113 @@ test("with one account per task off, a new chat is picked on its own and no work
   assert.deepEqual(fake.stored().autoPins, []);
   await sessionEnv(created({ agentId: "second" }), deps);
   assert.deepEqual(fake.stored().workspaces, {}, "and none are made");
+});
+
+// Profiles: a custom provider extending Claude ("Claude (Work)" with its own CLAUDE_CONFIG_DIR).
+
+const personal = { id: "default", label: "Personal", provider: "claude" as const, home: DEFAULT_DIR };
+const workDir = { id: "work", label: "Work", provider: "claude" as const, home: "/Users/me/.claude-work" };
+const workProfile = async (provider: string) =>
+  provider === "claude-work" ? { family: "claude" as const, configDir: "/Users/me/.claude-work/" } : null;
+
+function profiled(overrides: Partial<Registry> = {}) {
+  let stored: Registry = registry({ accounts: [personal, workDir], agents: {}, defaults: { claude: "default" }, ...overrides });
+  const d = deps({
+    readRegistry: async () => stored,
+    writeRegistry: async (next: Registry) => {
+      stored = next;
+    },
+    family: workProfile,
+  });
+  return { deps: d, stored: () => stored };
+}
+
+test("a new chat of a profile opens on the account of the profile's directory, not the default, and is bound to it", async () => {
+  const { deps: d, stored } = profiled();
+  const env = await sessionEnv(request({ provider: "claude-work", reason: "create" }), d);
+  assert.deepEqual(env, { PATH: "/usr/bin", CLAUDE_SECURESTORAGE_CONFIG_DIR: "/Users/me/.claude-work" });
+  assert.equal(stored().agents.ag1, "work");
+  // The profile chose the login; it does not pin the workspace for chats of other providers.
+  assert.equal(stored().workspaces, undefined);
+});
+
+test("a profile chat switched to another account opens on that account's login", async () => {
+  const { deps: d } = profiled({ agents: { ag1: "default" } });
+  const env = await sessionEnv(request({ provider: "claude-work", reason: "resume" }), d);
+  // The default directory's login is the unsuffixed Keychain item, whatever the profile's config dir.
+  assert.deepEqual(env, { PATH: "/usr/bin", CLAUDE_SECURESTORAGE_CONFIG_DIR: "" });
+});
+
+test("the environment's account wins over the profile's directory", async () => {
+  const { deps: d, stored } = profiled();
+  const env = await sessionEnv(
+    request({ provider: "claude-work", reason: "create", env: { PATH: "/usr/bin", PASEO_CLAUDE_ACCOUNT: "default" } }),
+    d,
+  );
+  assert.equal(env?.CLAUDE_SECURESTORAGE_CONFIG_DIR, "");
+  assert.equal(stored().agents.ag1, "default");
+});
+
+test("a profile's chat is never refused: it may run on something no variable shows", async () => {
+  const quiet = { log: () => {} };
+  let loginChecks = 0;
+  const loggedOut = async () => {
+    loginChecks += 1;
+    return { dir: "/Users/me/.claude", loggedIn: false };
+  };
+  const create = (env: Record<string, string> = {}) => request({ provider: "claude-work", reason: "create", env });
+  const noPin = async () => ({ family: "claude" as const, configDir: null });
+
+  const unset = profiled({ accounts: [personal], defaults: {} });
+  assert.equal(await sessionEnv(create(), { ...unset.deps, ...quiet, family: noPin, ownLogin: loggedOut }), undefined);
+
+  const removed = profiled({ accounts: [personal], defaults: { claude: "gone" } });
+  assert.equal(await sessionEnv(create(), { ...removed.deps, ...quiet, family: noPin, ownLogin: loggedOut }), undefined);
+
+  const asked = profiled();
+  assert.equal(await sessionEnv(create({ PASEO_CLAUDE_ACCOUNT: "gone" }), { ...asked.deps, ...quiet }), undefined);
+
+  const auto = profiled({ accounts: [personal] });
+  const empty = { ...auto.deps, ...quiet, autoPick: async () => null, ownLogin: loggedOut };
+  assert.equal(await sessionEnv(create({ PASEO_CLAUDE_ACCOUNT: AUTO }), empty), undefined);
+
+  // Its answer could not change anything, and each one runs `claude`.
+  assert.equal(loginChecks, 0);
+});
+
+test("Claude's own chat is still refused rather than started without a login", async () => {
+  const { deps: d } = profiled({ accounts: [personal], defaults: {} });
+  const refused = sessionEnv(request({ provider: "claude", reason: "create" }), {
+    ...d,
+    log: () => {},
+    ownLogin: async () => ({ dir: "/Users/me/.claude", loggedIn: false }),
+  });
+  await assert.rejects(refused, (error: Error) => error.name === "SessionRefused");
+});
+
+test("a profile whose directory is not a registered account opens the profile's way, unbound", async () => {
+  const { deps: d, stored } = profiled({ accounts: [personal] });
+  assert.equal(await sessionEnv(request({ provider: "claude-work", reason: "create" }), d), undefined);
+  assert.deepEqual(stored().agents, {});
+});
+
+test("an existing, never-bound profile chat is left alone", async () => {
+  const { deps: d } = profiled();
+  assert.equal(await sessionEnv(request({ provider: "claude-work", reason: "resume" }), d), undefined);
+});
+
+test("a profile pinning no directory is placed like a Claude chat", async () => {
+  const { deps: d, stored } = profiled();
+  const env = await sessionEnv(request({ provider: "claude-fast", reason: "create" }), {
+    ...d,
+    family: async () => ({ family: "claude", configDir: null }),
+  });
+  assert.equal(env?.CLAUDE_SECURESTORAGE_CONFIG_DIR, "");
+  assert.equal(stored().agents.ag1, "default");
+});
+
+test("a provider whose family cannot be read is left alone", async () => {
+  const { deps: d } = profiled();
+  const failing = { ...d, family: async () => Promise.reject(new Error("config unreadable")), log: () => {} };
+  assert.equal(await sessionEnv(request({ provider: "claude-work", reason: "create" }), failing), undefined);
 });
