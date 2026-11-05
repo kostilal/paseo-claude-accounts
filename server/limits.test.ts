@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { humanDuration, viewLimits } from "./limits.ts";
+import { t } from "../shared/i18n.ts";
+import { humanDuration, usedSummary, viewLimits } from "./limits.ts";
 
 const NOW = Date.parse("2026-10-31T17:00:00Z");
 
@@ -10,6 +11,14 @@ const reading = {
   sevenDay: { utilization: 61, resetsAt: "2026-11-03T10:00:00Z" },
   error: "",
 };
+
+test("the used line names both windows, and only the week on an account with no 5-hour window", () => {
+  const strings = t("en");
+  assert.equal(usedSummary(reading.fiveHour, reading.sevenDay, strings), "5 hours 42% · Week 61%");
+  assert.equal(usedSummary(null, reading.sevenDay, strings), "Week 61%");
+  assert.equal(usedSummary(reading.fiveHour, null, strings), "5 hours 42% · Week –");
+  assert.equal(usedSummary(null, null, strings), "5 hours – · Week –");
+});
 
 test("each window says what is used, what is left and when it resets, in words and in seconds", () => {
   const view = viewLimits(reading, { measuredAt: NOW - 190_000, heldUntil: null }, NOW);

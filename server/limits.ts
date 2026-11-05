@@ -1,4 +1,5 @@
 import type { UsageState } from "../shared/accounts.ts";
+import type { Strings } from "../shared/i18n.ts";
 import type { Bar } from "../shared/parse.ts";
 import type { UsageResult } from "./usage.ts";
 
@@ -54,6 +55,14 @@ export function humanDuration(totalSeconds: number): string {
   if (hours < 24) return minutes % 60 === 0 ? `${hours} h` : `${hours} h ${minutes % 60} min`;
   const days = Math.floor(hours / 24);
   return hours % 24 === 0 ? `${days} d` : `${days} d ${hours % 24} h`;
+}
+
+/** One line of what an account has used. An account with only a week names only the week: a
+ *  "5 hours –" there would read as a figure not read yet, not as a window it does not have. */
+export function usedSummary(fiveHour: Bar | null, sevenDay: Bar | null, strings: Strings): string {
+  const used = (bar: Bar | null) => (bar === null ? "–" : `${Math.round(bar.utilization)}%`);
+  const week = `${strings.sevenDayUsage} ${used(sevenDay)}`;
+  return fiveHour === null && sevenDay !== null ? week : `${strings.fiveHourUsage} ${used(fiveHour)} · ${week}`;
 }
 
 function windowView(bar: Bar | null, now: number): WindowView | null {

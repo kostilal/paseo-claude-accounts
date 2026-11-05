@@ -78,6 +78,10 @@ export interface Strings {
   refuseNotSet: string;
   refuseNoAccounts: string;
   pillUnread: string;
+  /** Before the pill's percentage, naming its window. Short, and the same width: the pill
+   *  sits above the composer on a phone too. */
+  pillFiveHourTag: string;
+  pillSevenDayTag: string;
   /** Delete only forgets: every confirm says the folder and login stay. */
   deleteAccount: string;
   deleteConfirm: string;
@@ -217,6 +221,8 @@ const en: Strings = {
   refuseNotSet: "This chat has no Claude account: nobody is logged in to {dir} and no default account is set. Choose one in Settings → Plugins → Claude Accounts, or log in on the Accounts screen.",
   refuseNoAccounts: "This chat has no Claude account: nobody is logged in to {dir} and no account has been added. Log in to one on the Accounts screen, then choose it in Settings → Plugins → Claude Accounts.",
   pillUnread: "…",
+  pillFiveHourTag: "5h",
+  pillSevenDayTag: "7d",
   deleteAccount: "Delete",
   deleteConfirm: "Remove this account from the list? Its folder and login stay where they are.",
   deleteSuggestionConfirm: "Hide this from the list? Its folder and login stay where they are.",
@@ -337,6 +343,8 @@ const ru: Strings = {
   refuseNotSet: "У этого чата нет аккаунта Claude: в {dir} никто не вошёл, а аккаунт по умолчанию не задан. Выбери его в разделе Настройки → Плагины → Claude Accounts или войди на экране аккаунтов.",
   refuseNoAccounts: "У этого чата нет аккаунта Claude: в {dir} никто не вошёл, и ни одного аккаунта не добавлено. Войди в один на экране аккаунтов и выбери его в разделе Настройки → Плагины → Claude Accounts.",
   pillUnread: "…",
+  pillFiveHourTag: "5ч",
+  pillSevenDayTag: "7д",
   deleteAccount: "Удалить",
   deleteConfirm: "Убрать аккаунт из списка? Папка и вход останутся.",
   deleteSuggestionConfirm: "Скрыть из списка? Папка и вход останутся.",
@@ -457,6 +465,8 @@ const uk: Strings = {
   refuseNotSet: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, а акаунт за замовчуванням не задано. Обери його в розділі Налаштування → Плагіни → Claude Accounts або увійди на екрані акаунтів.",
   refuseNoAccounts: "Цей чат не має акаунта Claude: у {dir} ніхто не увійшов, і жодного акаунта не додано. Увійди в один на екрані акаунтів і обери його в розділі Налаштування → Плагіни → Claude Accounts.",
   pillUnread: "…",
+  pillFiveHourTag: "5г",
+  pillSevenDayTag: "7д",
   deleteAccount: "Видалити",
   deleteConfirm: "Прибрати акаунт зі списку? Тека й вхід залишаться.",
   deleteSuggestionConfirm: "Сховати зі списку? Тека й вхід залишаться.",
