@@ -97,10 +97,10 @@ function nearlyFullText(account: PillAccount | null, strings: Strings): string |
 const pillKey = (agentId: string) => ["accounts", "pill", agentId];
 
 /**
- * The pill icon: a ring of the window the pill reads, the 5-hour one or the week on an account
- * without one (full once either window is exhausted), plus a green dot when the allowance is
- * (nearly) gone and another account could take over. The label beside it is host-owned, so the
- * figure is pushed through `registration.update()`.
+ * The pill icon: a ring of the window the pill reads, the fuller of the two (full once either
+ * window is exhausted), plus a green dot when the allowance is (nearly) gone and another account
+ * could take over. The label beside it is host-owned, so the figure is pushed through
+ * `registration.update()`.
  */
 function AccountPillIcon(
   props: PluginButtonIconProps & { registration: { current: PluginButtonRegistration | null } },
@@ -112,7 +112,7 @@ function AccountPillIcon(
   const askPill = useRpc(pillStateRpc);
   const cwd = useAgent(agentId, (agent) => agent.cwd);
 
-  const { data } = useQuery({
+  const { data, dataUpdatedAt } = useQuery({
     queryKey: pillKey(agentId),
     queryFn: () => askPill({ agentId, cwd: cwd ?? "", workspaceId, manual: false }),
     enabled: cwd !== null,
@@ -121,14 +121,16 @@ function AccountPillIcon(
 
   const current = data === undefined ? null : currentOf(data);
   // The host rejects an empty label (it throws inside addComposerPill), so use a placeholder.
-  const figure = current === null ? strings.pillNoAccount : pillFigure(current, Date.now(), strings);
+  // The wait is counted from the last poll: reading `dataUpdatedAt` renders the pill again on
+  // every poll, while `data` alone changes only when the numbers do, and the wait would stand still.
+  const figure = current === null ? strings.pillNoAccount : pillFigure(current, dataUpdatedAt, strings);
   const label = figure === "" ? strings.pillUnread : figure;
   useEffect(() => {
     registration.current?.update({ label, visible: showPill });
   }, [label, showPill, registration]);
 
-  // The green dot still weighs the week: it says another account has room, and a nearly
-  // spent week is as good a reason to move as a nearly spent 5 hours.
+  // The green dot weighs the week: it says another account has room, and a nearly spent week
+  // is as good a reason to move as a nearly spent 5 hours.
   const tightest = current === null ? null : tightestOf(current.fiveHour, current.sevenDay);
   const exhausted = current !== null && exhaustedResetIn(current.fiveHour, current.sevenDay, Date.now()) !== null;
   const spare = data !== undefined && (exhausted || (tightest !== null && tightest >= 90)) && hasSpare(data);

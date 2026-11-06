@@ -29,50 +29,69 @@ export function exhaustedResetIn(fiveHour: Window | null, sevenDay: Window | nul
   return Math.max(0, Math.max(...resets) - now);
 }
 
-/** The coarsest useful unit. Rounds up to at least one minute, since a reset seconds away
- *  is still a wait. */
-export function formatWait(ms: number, strings: Strings): string {
+/** The coarsest useful unit, counting in hours while the wait, rounded to the hour, is below
+ *  `daysFrom` hours. Rounds up to at least one minute, since a reset seconds away is still a
+ *  wait. */
+function waitParts(ms: number, daysFrom: number, strings: Strings): [number, string] {
   const minutes = Math.max(1, Math.ceil(ms / 60_000));
-  if (minutes < 60) return `${minutes} ${strings.unitMin}`;
+  if (minutes < 60) return [minutes, strings.unitMin];
   const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours} ${strings.unitHour}`;
-  return `${Math.round(hours / 24)} ${strings.unitDay}`;
+  if (hours < daysFrom) return [hours, strings.unitHour];
+  return [Math.round(hours / 24), strings.unitDay];
+}
+
+/** A wait in a line of text: "47 мин", "36 ч", "3 д". */
+export function formatWait(ms: number, strings: Strings): string {
+  const [count, unit] = waitParts(ms, 48, strings);
+  return `${count} ${unit}`;
+}
+
+/** A wait on the pill, which has room for one short figure: "47мин", "5ч", "3д". */
+function shortWait(ms: number, strings: Strings): string {
+  const [count, unit] = waitParts(ms, 24, strings);
+  return `${count}${unit}`;
+}
+
+/** How full a window is, 0–100, and 100 once it is exhausted. */
+function fullness(bar: Window): number {
+  return bar.utilization >= EXHAUSTED_AT ? 100 : bar.utilization;
+}
+
+/** When a window resets, in epoch milliseconds; Infinity when its reset time cannot be read. */
+function resetTime(bar: Window): number {
+  const at = Date.parse(bar.resetsAt);
+  return Number.isFinite(at) ? at : Infinity;
 }
 
 /**
- * The window the pill reads: the 5-hour one, which moves while you work; a ring stuck at the
- * week's 82% says nothing about the next hour. The week when the account has no 5-hour window:
- * the plan has none, the usage endpoint then sends only the week. The week too once it is
- * exhausted, because then it is what stops the account, however roomy the 5 hours. Null when
- * neither is known.
+ * The window the pill reads: the fuller of the two, as on the popover's rows, or the only one
+ * (the usage endpoint sends only the week for a plan with no 5-hour window). A tie, most often
+ * both windows exhausted, goes to the window that resets later: that is when the account can be
+ * used again. A reset time that cannot be read counts as the later one, so no wait is promised
+ * that might not hold. Null when neither window is known.
  */
-function pillWindow({ fiveHour, sevenDay }: PillAccount): "fiveHour" | "sevenDay" | null {
-  // Utilization itself, not exhaustedResetIn, which has no answer without a reset time: an
-  // exhausted week without one would read as a roomy 5 hours.
-  const weekGone = sevenDay !== null && sevenDay.utilization >= EXHAUSTED_AT;
-  if (fiveHour !== null && !weekGone) return "fiveHour";
-  return sevenDay !== null ? "sevenDay" : null;
+function pillWindow({ fiveHour, sevenDay }: PillAccount): Window | null {
+  if (fiveHour === null || sevenDay === null) return fiveHour ?? sevenDay;
+  if (fullness(fiveHour) !== fullness(sevenDay)) return fullness(fiveHour) > fullness(sevenDay) ? fiveHour : sevenDay;
+  return resetTime(fiveHour) > resetTime(sevenDay) ? fiveHour : sevenDay;
 }
 
 /** What the pill's ring fills to: the window it reads, and full once that one is exhausted. */
 export function pillPercent(current: PillAccount): number | null {
   const window = pillWindow(current);
-  if (window === null) return null;
-  const utilization = current[window]!.utilization;
-  return utilization >= EXHAUSTED_AT ? 100 : utilization;
+  return window === null ? null : fullness(window);
 }
 
-/** The figure beside the pill's ring: the window it reads, tagged so a 5-hour figure and a
- *  weekly one cannot be taken for each other ("5h 18%", "7d 62%"); the time until reset once
- *  either window is exhausted; or "" when usage is unknown (never a reassuring 0%). */
+/** The figure beside the pill's ring: the time until the window it reads resets, then how full
+ *  that window is ("3д 62%", "40мин 70%"); only the percentage when the reset time cannot be
+ *  read; or "" when usage is unknown (never a reassuring 0%). */
 export function pillFigure(current: PillAccount | null, now: number, strings: Strings): string {
   if (current === null) return strings.pillNoAccount;
-  const wait = exhaustedResetIn(current.fiveHour, current.sevenDay, now);
-  if (wait !== null) return formatWait(wait, strings);
-  const percent = pillPercent(current);
-  if (percent === null) return "";
-  const tag = pillWindow(current) === "fiveHour" ? strings.pillFiveHourTag : strings.pillSevenDayTag;
-  return `${tag} ${Math.round(percent)}%`;
+  const window = pillWindow(current);
+  if (window === null) return "";
+  const usage = `${Math.round(fullness(window))}%`;
+  const at = resetTime(window);
+  return at === Infinity ? usage : `${shortWait(Math.max(0, at - now), strings)} ${usage}`;
 }
 
 export function providerName(provider: string): string {
