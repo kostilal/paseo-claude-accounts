@@ -15,25 +15,22 @@ import {
   type AccountView,
   type HiddenView,
 } from "../shared/accounts.ts";
-import { loginLabel } from "../shared/identity.ts";
+import { loginName } from "../shared/identity.ts";
 import { switchAllRpc } from "../shared/switch.ts";
 import { setDefaultRpc } from "../shared/defaults.ts";
 import { type Strings, usageErrorText } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { PROVIDERS, type ProviderId, providerForHome } from "../shared/providers.ts";
-import { formatWait, providerName, savedAtText, tightestOf } from "./format.ts";
+import { formatWait, planName, providerName, savedAtText, tightestOf } from "./format.ts";
 import { ForecastCard } from "./forecast.tsx";
 import { revealNotice } from "./reveal-notice.ts";
 import { AccountRing } from "./ring.tsx";
 import { typeScale } from "./typography.ts";
 import { Banner, Button, Card, Chip, EmptyState, Meter, RADIUS, Screen, ScreenHeader, SectionLabel, Skeleton, TrashDot } from "./ui.tsx";
 
-/** A row is named by its login, falling back to the directory name. */
+/** A row is named by its login, whose it is first, falling back to the directory name. */
 function loginTitle(row: AccountView, strings: Strings): string {
-  return loginLabel(
-    { email: row.email, orgName: row.orgName, plan: "" },
-    row.name !== "" ? row.name : strings.notLoggedIn,
-  );
+  return loginName(row, strings.personalAccount, row.name !== "" ? row.name : strings.notLoggedIn);
 }
 
 function shortenPath(path: string): string {
@@ -44,14 +41,15 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** e.g. "Claude · max · 18%": provider, plan, and the tightest window when known. */
+/** e.g. "Claude · Max 20x · 18%": provider, plan, and the tightest window when known. */
 function detailLine(row: AccountView, strings: Strings): string {
   const parts = [providerName(row.provider)];
   if (!row.loggedIn) {
     parts.push(strings.notLoggedIn);
     return parts.join(" · ");
   }
-  if (row.subscriptionType !== "") parts.push(row.subscriptionType);
+  const plan = planName(row.subscriptionType, row.rateLimitTier);
+  if (plan !== "") parts.push(plan);
   const tightest = tightestOf(row.fiveHour, row.sevenDay);
   if (tightest !== null) parts.push(`${Math.round(tightest)}%`);
   if (row.autoNow) parts.push(strings.autoNowBadge);
@@ -655,7 +653,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
                           <View style={{ flex: 1, gap: 2 }}>
                             <Text style={{ ...typeScale.title, color: theme.colors.foreground }} numberOfLines={1}>
                               {row.loggedIn
-                                ? loginLabel({ email: row.email, orgName: row.orgName, plan: "" }, row.name)
+                                ? loginName(row, strings.personalAccount, row.name)
                                 : row.name}
                             </Text>
                             <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>

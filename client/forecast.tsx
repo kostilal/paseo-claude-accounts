@@ -13,9 +13,10 @@ import {
   type ForecastHint,
   forecastRpc,
   onTrack,
+  retitle,
 } from "../shared/forecast.ts";
 import type { Strings } from "../shared/i18n.ts";
-import { loginLabel } from "../shared/identity.ts";
+import { loginName } from "../shared/identity.ts";
 import { defaultPreferences, preferences } from "../shared/settings.ts";
 import { dayTimeText, formatWait, shortLogins } from "./format.ts";
 import { typeScale } from "./typography.ts";
@@ -537,7 +538,7 @@ export function ForecastCard({
     capacity: values.forecastCapacity,
     columns: layout.compact ? COLUMNS_COMPACT : COLUMNS_WIDE,
   };
-  const { data, isError, error, refetch, isPlaceholderData } = useQuery({
+  const { data: answer, isError, error, refetch, isPlaceholderData } = useQuery({
     queryKey: ["accounts", "forecast", input],
     queryFn: () => ask(input),
     // Settings that cannot be read fall back to the defaults, and the chart still draws.
@@ -568,7 +569,12 @@ export function ForecastCard({
   };
 
   const ticked = rows.filter((row) => !values.forecastUnchecked.includes(row.key));
-  const title = (row: AccountView) => loginLabel({ email: row.email, orgName: row.orgName, plan: "" }, row.name);
+  const title = (row: AccountView) => loginName(row, strings.personalAccount, row.name);
+  // Named here, as the rows above are: the daemon's names are addresses, which two accounts can share.
+  const data = answer === undefined ? undefined : retitle(answer, (key) => {
+    const row = rows.find((candidate) => candidate.key === key);
+    return row === undefined ? undefined : title(row);
+  });
   const excluded = (data?.excluded ?? []).filter((item) => item.reason !== "no-meter");
   const needsCapacity = excluded.some((item) => item.reason === "no-capacity");
 

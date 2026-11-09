@@ -29,3 +29,24 @@ export function loginLabel(login: { email: string; orgName: string; plan: string
   }
   return parts.length > 0 ? parts.join(" · ") : fallback;
 }
+
+/** Whose allowance a login is: the organisation of a team or enterprise seat, or `personal`
+ *  for the person's own (Claude names that org "<email>'s Organization", Codex "Personal").
+ *  "" when it is not known: a blank org may be a seat whose org was not read, so it is never
+ *  guessed to be personal. */
+export function loginOwner(login: { email: string; orgName: string }, personal: string): string {
+  const org = login.orgName.trim();
+  if (login.email === "" || org === "") return "";
+  const lower = org.toLowerCase();
+  if (lower.includes(login.email.toLowerCase()) || lower === "personal") return personal;
+  return org;
+}
+
+/** A row's one-line title, the owner first: one address can hold the person's own plan and a
+ *  company seat, and a row too narrow for the whole title must still say whose it is. The
+ *  address alone when the owner is unknown; with no address, the org, then `fallback`. */
+export function loginName(login: { email: string; orgName: string }, personal: string, fallback: string): string {
+  if (login.email === "") return login.orgName !== "" ? login.orgName : fallback;
+  const owner = loginOwner(login, personal);
+  return owner === "" ? login.email : `${owner} · ${login.email}`;
+}

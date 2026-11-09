@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AccountView } from "./accounts.ts";
-import { type Forecast, type ForecastHint, type Sample, computeForecast, fiveHourShare, forecast, onTrack, paceOf, planMultiple } from "./forecast.ts";
+import { type Forecast, type ForecastHint, type Sample, computeForecast, fiveHourShare, forecast, onTrack, paceOf, planMultiple, retitle } from "./forecast.ts";
 
 const HOUR = 3_600_000;
 const NOW = Date.UTC(2026, 10, 8, 12);
@@ -354,6 +354,7 @@ test("when the account at risk is not the one being worked on, the hint says who
   const speedUp = hintOf(result, "speed-up");
   assert.equal(speedUp.key, "late");
   assert.equal(speedUp.servedNow, "soon@example.com");
+  assert.equal(speedUp.servedNowKey, "soon", "the client names that account by its key");
 });
 
 test("an account that cannot take work yet is not named as the one to work on now", () => {
@@ -606,4 +607,29 @@ test("on track means no idle and nothing lost, not merely no hint", () => {
   const shortOfIt = run([row("a", { sevenDay: { utilization: 89.5, resetsAt: iso(near10) } })], { a: history({ hours: 30, usedNow: 89.5, perHour: 1.0178, resetsAt: near10 }) });
   assert.ok(shortOfIt.idle.length > 0);
   assert.equal(onTrack(shortOfIt), false);
+});
+
+test("the client can rename every account the forecast names, and keeps a name it has no other for", () => {
+  const soon = h(120);
+  const late = h(135);
+  const result = run(
+    [
+      row("late", { sevenDay: { utilization: 0, resetsAt: iso(late) } }),
+      row("soon", { sevenDay: { utilization: 22, resetsAt: iso(soon) } }),
+    ],
+    {
+      late: history({ hours: 30, usedNow: 0, perHour: 0, resetsAt: late }),
+      soon: history({ hours: 30, usedNow: 22, perHour: 0.7, resetsAt: soon }),
+    },
+  );
+  const named = retitle(result, (key) => (key === "soon" ? "Личный · soon@example.com" : undefined));
+  const speedUp = hintOf(named, "speed-up");
+  assert.equal(speedUp.servedNow, "Личный · soon@example.com");
+  assert.equal(speedUp.title, "late@example.com");
+  assert.equal(named.accounts.find((account) => account.key === "soon")?.title, "Личный · soon@example.com");
+  assert.equal(named.accounts.find((account) => account.key === "late")?.title, "late@example.com");
+
+  const left = run([row("week-less", { fiveHour: { utilization: 10, resetsAt: iso(h(2)) }, sevenDay: null })], {});
+  const out = retitle(left, (key) => (key === "week-less" ? "Acme · week-less@example.com" : undefined));
+  assert.deepEqual(out.excluded.map((item) => item.title), ["Acme · week-less@example.com"]);
 });

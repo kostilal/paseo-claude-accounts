@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { PaseoApi } from "./paseo.ts";
 import type { AccountView } from "../shared/accounts.ts";
-import { loginKey, loginLabel } from "../shared/identity.ts";
+import { loginKey, loginName } from "../shared/identity.ts";
 import { claudeNotFound } from "./discover.ts";
 import type { Registry } from "../shared/registry.ts";
 import {
@@ -343,17 +343,17 @@ test("a second login, with one directory, stays its own registered row", async (
 });
 
 test("every registered row carries what it takes to be named by its login, not by a folder", async () => {
-  // The screen names rows through loginLabel, falling back to `name` when no login is known.
+  // The screen names rows through loginName, falling back to `name` when no login is known.
   const view = await createOverview(
     deps({ discover: async () => groupedDiscovered(), readRegistry: async () => groupedRegistry() }),
   )(paseo);
   const named = view.accounts
     .filter((row) => row.registered)
-    .map((row) => loginLabel({ email: row.email, orgName: row.orgName, plan: row.subscriptionType }, row.name));
+    .map((row) => loginName(row, "Personal", row.name));
   assert.deepEqual(named, [
     "default",
-    "bob@example.com · Acme · team",
-    "alice@example.com · max",
+    "Acme · bob@example.com",
+    "alice@example.com",
   ]);
 });
 

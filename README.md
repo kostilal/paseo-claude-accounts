@@ -8,7 +8,11 @@ composer: the session restarts on that account and the conversation carries on.
   5 hours or the week: the time until that window resets, then how much of it is used. `3d 62%` is
   three days to go with 62% used, `2h 70%` two hours. Once a window is exhausted, `47min 100%` is
   the wait until the account can be used again. An account with no 5-hour window (Ultra) shows its
-  week. Press it to see every account's allowance and switch the chat.
+  week. Press it to see every account's allowance and switch the chat. One address can hold two
+  accounts, your own plan and a company seat: then the pill names the chat's account after the
+  figure, `2h 70% · Personal` or `3d 62% · Acme` (for Acme LLC). In the popover, and on the Accounts
+  screen, every account leads with whose it is, Personal or its organisation, and the popover puts
+  its plan and address underneath.
 - **Accounts screen.** Every Claude login on the machine, grouped by subscription, with usage bars,
   login buttons and "Add account". It opens at once on the last data it was given, saved by the
   daemon, and updates in place while it measures; **Reload** re-measures every account.

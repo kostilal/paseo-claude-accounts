@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { t } from "../shared/i18n.ts";
 import type { PillAccount, PillState } from "../shared/switch.ts";
-import { exhaustedResetIn, formatWait, hasSpare, pillFigure, pillPercent, refreshNotice, rowAgeText, savedAtText, shortLogins, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
+import { exhaustedResetIn, formatWait, hasSpare, pillFigure, pillLabel, pillPercent, pillTag, planName, refreshNotice, rowAgeText, savedAtText, shortLogins, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
 
 const strings = t("ru");
 const now = Date.parse("2026-09-16T12:00:00Z");
@@ -20,6 +20,7 @@ function account(over: Partial<PillAccount> = {}): PillAccount {
     email: "alice@example.com",
     orgName: "",
     plan: "max",
+    tier: "",
     accountIds: ["work"],
     switchTo: "work",
     loggedIn: true,
@@ -239,6 +240,15 @@ test("two logins in one line lose their domains, unless that is all that tells t
   assert.deepEqual(shortLogins("account-1", "me@example.com"), ["account-1", "me"]);
 });
 
+test("two titles that start with whose they are keep just that, when it tells them apart", () => {
+  assert.deepEqual(shortLogins("Личный · me@example.com", "Acme LLC · me@example.com"), ["Личный", "Acme LLC"]);
+  // One owner for both: the addresses tell them apart.
+  assert.deepEqual(shortLogins("Личный · devxypro@gmail.com", "Личный · sapfotanya@gmail.com"), ["devxypro", "sapfotanya"]);
+  assert.deepEqual(shortLogins("Acme · kain@evodev.pro", "kain@gmail.com"), ["Acme · kain@evodev.pro", "kain@gmail.com"]);
+  // Different owners on different addresses: the owners still say it shortest.
+  assert.deepEqual(shortLogins("Личный · me@example.com", "Evodev · kain@evodev.pro"), ["Личный", "Evodev"]);
+});
+
 test("numbers held through a rate limit say how long the wait is", () => {
   const notice = refreshNotice(answered({ outcome: "held", heldUntil: now + 25 * 60_000 }), now, en)!;
   assert.equal(notice.text, "The usage service asked to wait 25 min");
@@ -262,4 +272,96 @@ test("saved data shows the time alone today and the date on another day", () => 
   const earlier = savedAtText(now - 3 * 24 * 60 * 60_000, now, "en");
   assert.notEqual(today, "");
   assert.ok(earlier.length > today.length, `${earlier} should carry a date beyond ${today}`);
+});
+
+test("a plan reads by its name, and a Max plan by its multiple too", () => {
+  assert.equal(planName("max", "default_claude_max_20x"), "Max 20x");
+  assert.equal(planName("max", ""), "Max");
+  assert.equal(planName("pro", ""), "Pro");
+  assert.equal(planName("", "default_claude_max_5x"), "");
+});
+
+test("a Team seat is Team, though its tier names a Max multiple", () => {
+  assert.equal(planName("team", "default_claude_max_5x"), "Team");
+});
+
+/** One address logged in twice: the person's own plan and a company seat. */
+function twins(currentKey: "own" | "work"): PillState {
+  const email = "me@example.com";
+  return {
+    currentId: currentKey,
+    tightest: null,
+    error: "",
+    overridingVar: "",
+    accounts: [
+      account({ key: "own", email, orgName: `${email}'s Organization`, plan: "max", current: currentKey === "own" }),
+      account({ key: "work", email, orgName: "Acme LLC", plan: "team", current: currentKey === "work" }),
+    ],
+  };
+}
+
+test("the pill names the account when another login has the same address", () => {
+  assert.equal(pillTag(twins("own"), strings), strings.personalAccount);
+  assert.equal(pillTag(twins("work"), strings), "Acme");
+});
+
+test("a login of another provider on the same address is no twin: the pill cannot switch to it", () => {
+  const state = twins("work");
+  const codex: PillState = { ...state, accounts: [{ ...state.accounts[0]!, provider: "codex", orgName: "Personal" }, state.accounts[1]!] };
+  assert.equal(pillTag(codex, strings), "");
+});
+
+test("the pill leaves a company's legal form off its name", () => {
+  const named = (orgName: string) => {
+    const state = twins("work");
+    return pillTag({ ...state, accounts: [state.accounts[0]!, { ...state.accounts[1]!, orgName }] }, strings);
+  };
+  assert.equal(named("UAPROM LLC"), "UAPROM");
+  assert.equal(named("Acme, Inc."), "Acme");
+  assert.equal(named("ТОВ «Юапром»"), "Юапром");
+  assert.equal(named("Smith & Co."), "Smith");
+  // Nothing but a legal form is still a name.
+  assert.equal(named("LLC"), "LLC");
+});
+
+test("the pill names nothing when the address alone tells the accounts apart", () => {
+  const state = twins("own");
+  const unique: PillState = { ...state, accounts: [state.accounts[0]!, account({ key: "kain", email: "kain@example.com", orgName: "Evodev" })] };
+  assert.equal(pillTag(unique, strings), "");
+});
+
+test("a twin that is not logged in does not count, and neither does a chat on no account", () => {
+  const state = twins("own");
+  const loggedOut: PillState = { ...state, accounts: [state.accounts[0]!, { ...state.accounts[1]!, loggedIn: false }] };
+  assert.equal(pillTag(loggedOut, strings), "");
+  const none: PillState = { ...state, accounts: state.accounts.map((row) => ({ ...row, current: false })) };
+  assert.equal(pillTag(none, strings), "");
+});
+
+test("addresses that differ only in case are the same address", () => {
+  const state = twins("work");
+  const shouted: PillState = { ...state, accounts: [{ ...state.accounts[0]!, email: "ME@example.com" }, state.accounts[1]!] };
+  assert.equal(pillTag(shouted, strings), "Acme");
+});
+
+test("a long organisation is cut short, so the pill still fits a phone", () => {
+  const state = twins("work");
+  const long: PillState = { ...state, accounts: [state.accounts[0]!, { ...state.accounts[1]!, orgName: "International Widget Holdings LLC" }] };
+  const tag = pillTag(long, strings);
+  assert.ok(tag.endsWith("…"));
+  assert.ok([...tag].length <= 12, tag);
+  assert.ok("International Widget Holdings LLC".startsWith(tag.slice(0, -1)));
+});
+
+test("twins with no org to tell them apart are named by their plans", () => {
+  const state = twins("work");
+  const blank: PillState = { ...state, accounts: state.accounts.map((row) => ({ ...row, orgName: "" })) };
+  assert.equal(pillTag(blank, strings), "Team");
+});
+
+test("the pill's label puts the figure first, where the host's cut cannot reach it, and keeps a placeholder for an unread one", () => {
+  assert.equal(pillLabel("", "2ч 23%", strings), "2ч 23%");
+  assert.equal(pillLabel("Acme", "2ч 23%", strings), "2ч 23% · Acme");
+  assert.equal(pillLabel("", "", strings), strings.pillUnread);
+  assert.equal(pillLabel("Acme", "", strings), `${strings.pillUnread} · Acme`);
 });

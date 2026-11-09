@@ -1,5 +1,6 @@
 import type { RefreshAccountAnswer } from "../shared/accounts.ts";
 import { type Strings, usageErrorText } from "../shared/i18n.ts";
+import { loginOwner } from "../shared/identity.ts";
 import type { PillAccount, PillState } from "../shared/switch.ts";
 
 /** Same shape as `Bar` in shared/accounts.ts, redeclared so the pill does not import Zod. */
@@ -95,6 +96,54 @@ export function pillFigure(current: PillAccount | null, now: number, strings: St
   return at === Infinity ? usage : `${shortWait(Math.max(0, at - now), strings)} ${usage}`;
 }
 
+/** The longest name the pill gives an account, in characters: the pill has to fit a phone. */
+const PILL_TAG_MAX = 12;
+
+/** A company's legal form, which says nothing about whose an account is and takes room the pill
+ *  has not got: "Acme LLC" and "ТОВ «Acme»" are both "Acme" there. */
+const LEGAL_FORM = /^(?:ТОВ|ООО|ПП)\s+|[\s,]+(?:LLC|L\.L\.C\.|Inc\.?|Ltd\.?|Limited|GmbH|LLP|Corp\.?|Co\.)$/giu;
+
+function withoutLegalForm(org: string): string {
+  const bare = org.replace(LEGAL_FORM, "").replace(/[\s,&]+$/u, "").replace(/^[«"“](.+)[»"”]$/u, "$1").trim();
+  return bare === "" ? org : bare;
+}
+
+/** A plan as it is sold: "Max 20x", "Team", "Pro". Only Max carries its multiple: a Team seat's
+ *  tier names a Max multiple too, and "Team 5x" reads as a plan nobody bought. The multiple is
+ *  read as `planMultiple` in shared/forecast.ts reads it, so this module stays clear of Zod, as
+ *  `Window` above does. "" when the plan is unknown. */
+export function planName(plan: string, tier: string): string {
+  if (plan === "") return "";
+  const name = plan.charAt(0).toUpperCase() + plan.slice(1);
+  const multiple = plan === "max" ? /_(\d+)x\b/.exec(tier)?.[1] : undefined;
+  return multiple === undefined ? name : `${name} ${multiple}x`;
+}
+
+/** The pill's name for the chat's account, given only when the figure alone cannot say which
+ *  account that is: another logged-in account of the same provider has the same address. The
+ *  owner without its legal form, or the plan when the owner is unknown; cut short for the pill.
+ *  "" when no name is needed. */
+export function pillTag(state: PillState, strings: Strings): string {
+  const current = currentOf(state);
+  if (current === null || !current.loggedIn || current.email === "") return "";
+  const address = current.email.toLowerCase();
+  const twin = state.accounts.some(
+    (row) => row.loggedIn && row.provider === current.provider && row.key !== current.key && row.email.toLowerCase() === address,
+  );
+  if (!twin) return "";
+  const owner = loginOwner(current, strings.personalAccount);
+  const name = [...(owner !== "" ? withoutLegalForm(owner) : planName(current.plan, current.tier))];
+  return name.length <= PILL_TAG_MAX ? name.join("") : `${name.slice(0, PILL_TAG_MAX - 1).join("").trimEnd()}…`;
+}
+
+/** The pill's text: the figure, then the account's name when it has one. The figure goes first
+ *  because the host cuts a long label at its end. The host refuses an empty label, so an unread
+ *  figure keeps a placeholder. */
+export function pillLabel(tag: string, figure: string, strings: Strings): string {
+  const shown = figure === "" ? strings.pillUnread : figure;
+  return tag === "" ? shown : `${shown} · ${tag}`;
+}
+
 export function providerName(provider: string): string {
   return provider === "codex" ? "Codex" : provider === "claude" ? "Claude" : provider;
 }
@@ -165,9 +214,14 @@ export function rowAgeText(at: number, heldUntil: number | null, now: number, st
   return updatedAgoText(at, now, strings);
 }
 
-/** Two logins in the one line there is for both: what comes before the @ will do, if it tells them apart. */
+/** Two logins in the one line there is for both: whose each is, when both titles start with
+ *  that (`loginName`) and it tells them apart, or else what comes before the @, if that does. */
 export function shortLogins(a: string, b: string): [string, string] {
-  const [first, second] = [a.split("@")[0]!, b.split("@")[0]!];
+  const owner = (title: string) => (title.includes(" · ") ? title.slice(0, title.indexOf(" · ")) : "");
+  const [ownerA, ownerB] = [owner(a), owner(b)];
+  if (ownerA !== "" && ownerB !== "" && ownerA !== ownerB) return [ownerA, ownerB];
+  const local = (title: string, owned: string) => title.slice(owned === "" ? 0 : owned.length + 3).split("@")[0]!;
+  const [first, second] = [local(a, ownerA), local(b, ownerB)];
   return first === second ? [a, b] : [first, second];
 }
 

@@ -15,7 +15,7 @@ export const accountView = z.object({
    *  directory. Actions on the login itself address `switchTo`. */
   id: z.string(),
   /** The registry's label for the directory `id` points at. Rows are titled by their
-   *  login (`loginLabel`); this is the fallback when the login is unknown. */
+   *  login (`loginName`); this is the fallback when the login is unknown. */
   name: z.string(),
   /** The config directory: one of possibly several holding this login (see `accountIds`). */
   home: z.string().default(""),
@@ -26,8 +26,7 @@ export const accountView = z.object({
   /** The login key from shared/identity.ts. */
   key: z.string().default(""),
   loggedIn: z.boolean(),
-  /** The parts a row is titled by, joined with `loginLabel` (which calls
-   *  `subscriptionType` `plan`). */
+  /** The parts a row is titled by, joined with `loginName`. */
   email: z.string().default(""),
   orgName: z.string().default(""),
   subscriptionType: z.string().default(""),
