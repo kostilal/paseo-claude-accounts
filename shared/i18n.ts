@@ -17,6 +17,8 @@ export interface Strings {
   unitMin: string;
   unitHour: string;
   unitDay: string;
+  /** Under a minute, in "refreshed 20 s ago". */
+  unitSec: string;
   limitExhausted: string;
   limitNearly: string;
   spareAvailable: string;
@@ -25,6 +27,11 @@ export interface Strings {
   usageUnsupported: string;
   usageUnknownAccount: string;
   usageReadFailed: string;
+  usageRateLimited: string;
+  usageTimedOut: string;
+  usageNetworkFailed: string;
+  usageNoToken: string;
+  usageBadKeychain: string;
   claudeNotFound: string;
   /** `{var}` is replaced with the variable's name. */
   apiKeyOverride: string;
@@ -97,6 +104,8 @@ export interface Strings {
   /** Moves every chat in every workspace onto one account. Every state is the button's own
    *  label, so keep them short. */
   moveAllChats: string;
+  /** On an account's card: new chats open on this account from now on. */
+  newChatsHere: string;
   /** The armed button: a second press moves. */
   moveAllConfirm: string;
   moveAllRunning: string;
@@ -129,8 +138,6 @@ export interface Strings {
   perWorkspaceHint: string;
   /** The Accounts screen's badge, under Auto, on the account Auto would pick now. */
   autoNowBadge: string;
-  /** The Accounts screen's new-chats card. */
-  newChatsHint: string;
   /** `{label}` is the id `PASEO_CLAUDE_ACCOUNT` names, or the account's label. */
   refuseAskedUnknown: string;
   refuseAskedMissingDir: string;
@@ -143,6 +150,121 @@ export interface Strings {
   /** What the chat's agent reads; `{label}` is the login. */
   attachAccountText: string;
   attachAutoText: string;
+  /** Settings: how often a reading is taken again. */
+  refreshIntervalLabel: string;
+  refreshIntervalHint: string;
+  /** The pill popover's round refresh buttons, one per account and one above the list. */
+  refreshAccount: string;
+  refreshAllAccounts: string;
+  /** In the corner of a row in the popover: when it was last measured. `{ago}`: how long since. */
+  updatedAgo: string;
+  updatedJustNow: string;
+  /** `{wait}`: how long the usage service asked to wait. */
+  refreshHeld: string;
+  /** Under the Accounts header while the saved overview is shown; `{time}` is when it was saved. */
+  savedDataNote: string;
+  /** The same while the refresh has failed. */
+  savedDataFailed: string;
+  /** The forecast card on the Accounts screen. */
+  forecastMore: string;
+  forecastLess: string;
+  forecastHeroSpeedLead: string;
+  forecastHeroSpeedNote: string;
+  forecastHeroLost: string;
+  forecastHeroReset: string;
+  forecastHeroBoost: string;
+  forecastHeroSlowLead: string;
+  forecastHeroCut: string;
+  forecastHeroTarget: string;
+  forecastHeroIdle: string;
+  forecastHeroSlowNote: string;
+  forecastHeroOpenDetails: string;
+  forecastTitle: string;
+  forecastHint: string;
+  forecastNothingTicked: string;
+  forecastNoReadings: string;
+  forecastLoadFailed: string;
+  forecastReserveNow: string;
+  forecastUsableNow: string;
+  forecastPace: string;
+  forecastPaceValue: string;
+  forecastAccuracy: string;
+  forecastLevelHigh: string;
+  forecastLevelMedium: string;
+  forecastLevelLow: string;
+  forecastLevelNone: string;
+  forecastBand: string;
+  forecastBasisBacktest: string;
+  forecastBasisRule: string;
+  forecastHistory: string;
+  forecastHistoryRange: string;
+  forecastHistoryNone: string;
+  forecastHistoryUnderHour: string;
+  forecastReadoutNow: string;
+  forecastReadoutAt: string;
+  forecastLegendReserve: string;
+  forecastLegendBand: string;
+  forecastLegendUsable: string;
+  forecastLegendIdle: string;
+  forecastLegendReset: string;
+  forecastSlowTitle: string;
+  forecastSlowLater: string;
+  forecastSpeedTitle: string;
+  forecastSpeedLimited: string;
+  forecastIdleNowTitle: string;
+  forecastIdleNowBody: string;
+  forecastOnTrackTitle: string;
+  forecastOnTrackBody: string;
+  forecastTooLittle: string;
+  forecastIdleHeading: string;
+  forecastNoIdle: string;
+  forecastIdleSpell: string;
+  forecastIdleWeekly: string;
+  forecastIdleShort: string;
+  forecastWeekReset: string;
+  forecastWeekIdle: string;
+  forecastFiveReset: string;
+  forecastFiveIdle: string;
+  forecastNoFive: string;
+  forecastLeftAtReset: string;
+  forecastEmptyAt: string;
+  forecastSpendable: string;
+  forecastSpendableShort: string;
+  forecastBasisLine: string;
+  forecastSourceHistory: string;
+  forecastSourceBlend: string;
+  forecastSourceAverage: string;
+  forecastSourceNone: string;
+  forecastCostMeasured: string;
+  forecastCostAssumed: string;
+  forecastCapacitySame: string;
+  forecastCapacityPlan: string;
+  forecastCapacityManual: string;
+  forecastCapacityHeading: string;
+  forecastCapacityHint: string;
+  forecastCapacityShow: string;
+  forecastCapacityHide: string;
+  forecastCapacityAuto: string;
+  forecastOutLine: string;
+  forecastOutNoMeter: string;
+  forecastOutNoReading: string;
+  forecastOutNoWeek: string;
+  forecastOutNoReset: string;
+  forecastOutNoCapacity: string;
+  forecastAssumptionsHeading: string;
+  forecastAssumePercentOnly: string;
+  forecastAssumeSteadyPace: string;
+  forecastAssumeEarliestFirst: string;
+  forecastAssumeSpendCeiling: string;
+  forecastAssumeWindowRestarts: string;
+  forecastAssumeModelLimits: string;
+  forecastAssumeSamePlan: string;
+  forecastAssumePlanMultiple: string;
+  forecastAssumeManual: string;
+  forecastAssumeWindowCost: string;
+  forecastAssumeThinHistory: string;
+  forecastAssumeNoHistory: string;
+  forecastAssumeOldReadings: string;
 }
 
 const en: Strings = {
@@ -168,6 +290,11 @@ const en: Strings = {
   usageUnsupported: "allowance not readable for this provider",
   usageUnknownAccount: "This account no longer exists.",
   usageReadFailed: "Could not read usage.",
+  usageRateLimited: "The usage service is limiting requests; it will be asked again after the wait.",
+  usageTimedOut: "The reading did not finish in time.",
+  usageNetworkFailed: "No connection to the usage service",
+  usageNoToken: "This folder has no Claude login.",
+  usageBadKeychain: "The login stored for this folder cannot be read.",
   claudeNotFound: "The claude command could not be found, so no account could be checked. Install Claude Code, or start Paseo from a terminal.",
   apiKeyOverride: "{var} is set in Paseo's environment, so Claude Code uses it instead of the account picked here. Remove it for switching to take effect.",
   pillNoAccount: "No account",
@@ -205,7 +332,7 @@ const en: Strings = {
   noAccountsDetail: "Log in to the first one; chats can then switch between subscriptions.",
   settingsTitle: "Accounts",
   languageLabel: "Language",
-  languageAuto: "Same as the system",
+  languageAuto: "Same as Paseo",
   showPill: "Pill above chats",
   showPillHint: "The account ring and figure in the composer of every Claude chat. Switching happens there.",
   settingsHint: "Changes apply immediately.",
@@ -232,6 +359,7 @@ const en: Strings = {
   restore: "Restore",
   restoreFailed: "Could not restore.",
   moveAllChats: "Move all chats here",
+  newChatsHere: "New chats here",
   moveAllConfirm: "Press again to move",
   moveAllRunning: "Moving…",
   moveAllDone: "Moved {moved}",
@@ -262,7 +390,115 @@ const en: Strings = {
   perWorkspaceLabel: "One account per task",
   perWorkspaceHint: "Auto's first pick in a workspace holds for all its new chats, until the default changes. Off: each new chat is picked on its own.",
   autoNowBadge: "Auto · now",
-  newChatsHint: "Auto picks one by its allowance as each chat opens. The same choice as the account button in a workspace header.",
+  unitSec: "s",
+  refreshIntervalLabel: "Auto-refresh",
+  refreshIntervalHint: "How often accounts are measured again while Paseo is open. Very short intervals risk the usage service's rate limit.",
+  refreshAccount: "Refresh this account",
+  refreshAllAccounts: "Refresh all accounts",
+  updatedAgo: "{ago} ago",
+  updatedJustNow: "just now",
+  refreshHeld: "The usage service asked to wait {wait}",
+  savedDataNote: "Saved data from {time} · updating…",
+  savedDataFailed: "Saved data from {time}",
+  forecastMore: "Details: chart, accounts, assumptions",
+  forecastLess: "Hide details",
+  forecastHeroSpeedLead: "{account}: use it first",
+  forecastHeroSpeedNote: "From {from}, {extra} of its week can still be spent by then.",
+  forecastHeroLost: "lost",
+  forecastHeroReset: "reset",
+  forecastHeroBoost: "pace",
+  forecastHeroSlowLead: "Runs out {from}, idle until {to}",
+  forecastHeroCut: "pace",
+  forecastHeroTarget: "hold",
+  forecastHeroIdle: "idle",
+  forecastHeroSlowNote: "From now until {until}.",
+  forecastHeroOpenDetails: "Nothing can be counted yet: open the details.",
+  forecastTitle: "Reserve forecast",
+  forecastHint: "Ticked accounts combined, as a share of their combined weekly capacity. The provider reports percentages only, so nothing here is in tokens.",
+  forecastNothingTicked: "Tick an account to see its forecast.",
+  forecastNoReadings: "Nothing to forecast yet: none of the ticked accounts has a reading.",
+  forecastLoadFailed: "Could not load the forecast.",
+  forecastReserveNow: "Reserve now",
+  forecastUsableNow: "Usable right now",
+  forecastPace: "Recent pace",
+  forecastPaceValue: "{pace}% / h",
+  forecastAccuracy: "Accuracy: {level}",
+  forecastLevelHigh: "high",
+  forecastLevelMedium: "medium",
+  forecastLevelLow: "low",
+  forecastLevelNone: "not enough data",
+  forecastBand: "±{pct}% {basis}",
+  forecastBasisBacktest: "(how far past days' pace missed the next day)",
+  forecastBasisRule: "(a rule of thumb from how much history there is)",
+  forecastHistory: "history {hours}",
+  forecastHistoryRange: "history {from} to {to}",
+  forecastHistoryNone: "no history yet",
+  forecastHistoryUnderHour: "under an hour",
+  forecastReadoutNow: "Now: reserve {reserve}, usable {usable}",
+  forecastReadoutAt: "{at}: reserve {reserve} ({low}–{high}), usable {usable}",
+  forecastLegendReserve: "Forecast reserve",
+  forecastLegendBand: "Range at a faster and a slower pace",
+  forecastLegendUsable: "Usable at that moment, given the 5-hour windows",
+  forecastLegendIdle: "Idle: no ticked account has room",
+  forecastLegendReset: "Weekly reset",
+  forecastSlowTitle: "Slow down",
+  forecastSlowLater: "Put it off until {at} and it takes a cut of {cut}.",
+  forecastSpeedTitle: "You can speed up",
+  forecastSpeedLimited: "The 5-hour windows limit this; the rest is lost however hard it is used.",
+  forecastIdleNowTitle: "No room right now",
+  forecastIdleNowBody: "No ticked account can take work until {until}.",
+  forecastOnTrackTitle: "On track",
+  forecastOnTrackBody: "At this pace no idle time is forecast and nothing worth using is lost at a reset.",
+  forecastTooLittle: "Too little to go on for a pace yet. The chart shows the reserve as it stands.",
+  forecastIdleHeading: "Expected idle",
+  forecastNoIdle: "None expected.",
+  forecastIdleSpell: "{from} – {to} ({length}, {cause})",
+  forecastIdleWeekly: "weeks spent",
+  forecastIdleShort: "5-hour windows spent",
+  forecastWeekReset: "Week resets {at}",
+  forecastWeekIdle: "Week not started",
+  forecastFiveReset: "5 hours reset {at}",
+  forecastFiveIdle: "5 hours not started",
+  forecastNoFive: "no 5-hour window",
+  forecastLeftAtReset: "Forecast left at the reset: {pct} of its week",
+  forecastEmptyAt: "Its week runs out {at}, before the reset",
+  forecastSpendable: "Can still be spent by the reset: {pct} of its week",
+  forecastSpendableShort: "Can still be spent by the reset: only {pct} of its week, the 5-hour windows limit it",
+  forecastBasisLine: "Pace {pace}% of its week / h ({source})",
+  forecastSourceHistory: "last 24 h",
+  forecastSourceBlend: "recent readings and the week's average",
+  forecastSourceAverage: "average since the week began",
+  forecastSourceNone: "no basis yet",
+  forecastCostMeasured: "a 5-hour window costs {pct} of the week, measured",
+  forecastCostAssumed: "a 5-hour window costs about {pct} of the week, assumed",
+  forecastCapacitySame: "same plan as the others",
+  forecastCapacityPlan: "capacity ×{n} from its plan",
+  forecastCapacityManual: "capacity ×{n} set by hand",
+  forecastCapacityHeading: "Capacity",
+  forecastCapacityHint: "How big each account's limits are, in multiples of a Pro plan. Auto takes it from the plan where the plan says.",
+  forecastCapacityShow: "Set capacities",
+  forecastCapacityHide: "Hide capacities",
+  forecastCapacityAuto: "Auto",
+  forecastOutLine: "{account} is left out: {reason}",
+  forecastOutNoMeter: "the provider has no usage meter",
+  forecastOutNoReading: "its usage could not be read",
+  forecastOutNoWeek: "it reports no weekly window",
+  forecastOutNoReset: "the provider gave no reset time for its week",
+  forecastOutNoCapacity: "the size of its plan is unknown; set its capacity above",
+  forecastAssumptionsHeading: "What this rests on",
+  forecastAssumePercentOnly: "The provider reports percentages and reset times only, so nothing here is in tokens.",
+  forecastAssumeSteadyPace: "The recent pace is taken to carry on unchanged.",
+  forecastAssumeEarliestFirst: "Work is taken to go to the account whose week resets soonest.",
+  forecastAssumeSpendCeiling: "What can still be spent is limited by the windows alone, not by how fast you work.",
+  forecastAssumeWindowRestarts: "After a reset, a new 5-hour window is taken to start with the next request.",
+  forecastAssumeModelLimits: "Separate weekly limits per model (such as Opus) are not counted and can run out sooner.",
+  forecastAssumeSamePlan: "The accounts are on one plan, so they are taken to have equal capacity.",
+  forecastAssumePlanMultiple: "Capacity comes from each plan's multiple of Pro. Those multiples are published for the 5-hour window only, so weekly capacity may differ.",
+  forecastAssumeManual: "Capacities set by hand are used as given.",
+  forecastAssumeWindowCost: "What a 5-hour window costs of the week is not measured yet on some accounts; an assumed figure of at most 15% of the week is used.",
+  forecastAssumeThinHistory: "Less than a day of readings on some accounts: their pace blends the recent readings with the week's average.",
+  forecastAssumeNoHistory: "No readings to speak of on some accounts: their pace is the average since their week began.",
+  forecastAssumeOldReadings: "Some readings are more than two hours old.",
 };
 
 const ru: Strings = {
@@ -288,6 +524,11 @@ const ru: Strings = {
   usageUnsupported: "остаток по этому провайдеру не читается",
   usageUnknownAccount: "Этого аккаунта больше нет.",
   usageReadFailed: "Не удалось прочитать лимиты.",
+  usageRateLimited: "Сервис лимитов ограничил запросы, повторю после паузы.",
+  usageTimedOut: "Замер не успел завершиться.",
+  usageNetworkFailed: "Нет связи с сервисом лимитов",
+  usageNoToken: "В этой папке нет входа в Claude.",
+  usageBadKeychain: "Сохранённый вход этой папки не читается.",
   claudeNotFound: "Не нашёл команду claude, поэтому ни один аккаунт не проверен. Установи Claude Code или запусти Paseo из терминала.",
   apiKeyOverride: "В окружении Paseo задан {var}, поэтому Claude Code использует его, а не выбранный здесь аккаунт. Убери его, чтобы переключение работало.",
   pillNoAccount: "Без аккаунта",
@@ -325,7 +566,7 @@ const ru: Strings = {
   noAccountsDetail: "Войди в первый — и чаты смогут переключаться между подписками.",
   settingsTitle: "Аккаунты",
   languageLabel: "Язык",
-  languageAuto: "Как в системе",
+  languageAuto: "Как в Paseo",
   showPill: "Пилюля над чатами",
   showPillHint: "Кольцо и цифра аккаунта в композере каждого чата Claude. Переключение делается там.",
   settingsHint: "Изменения применяются сразу.",
@@ -352,6 +593,7 @@ const ru: Strings = {
   restore: "Вернуть",
   restoreFailed: "Не удалось вернуть.",
   moveAllChats: "Перевести все чаты сюда",
+  newChatsHere: "Новые чаты сюда",
   moveAllConfirm: "Нажми ещё раз",
   moveAllRunning: "Перевожу…",
   moveAllDone: "Переведено: {moved}",
@@ -382,7 +624,115 @@ const ru: Strings = {
   perWorkspaceLabel: "Один аккаунт на задачу",
   perWorkspaceHint: "Первый выбор Авто в воркспейсе действует на все его новые чаты, пока не сменится аккаунт по умолчанию. Выключено: каждый новый чат выбирается отдельно.",
   autoNowBadge: "Авто · сейчас",
-  newChatsHint: "Авто выбирает аккаунт по лимитам при открытии каждого чата. Тот же выбор, что и кнопка аккаунтов в шапке воркспейса.",
+  unitSec: "с",
+  refreshIntervalLabel: "Автообновление",
+  refreshIntervalHint: "Как часто аккаунты измеряются заново, пока открыт Paseo. На совсем коротком интервале можно упереться в ограничение запросов сервиса лимитов.",
+  refreshAccount: "Обновить этот аккаунт",
+  refreshAllAccounts: "Обновить все аккаунты",
+  updatedAgo: "{ago} назад",
+  updatedJustNow: "только что",
+  refreshHeld: "Сервис лимитов попросил подождать {wait}",
+  savedDataNote: "Сохранённые данные от {time} · обновляю…",
+  savedDataFailed: "Сохранённые данные от {time}",
+  forecastMore: "Подробнее: график, аккаунты, допущения",
+  forecastLess: "Свернуть",
+  forecastHeroSpeedLead: "{account}: используй его первым",
+  forecastHeroSpeedNote: "С {from} можно успеть потратить ещё {extra} его недели.",
+  forecastHeroLost: "сгорит",
+  forecastHeroReset: "сброс",
+  forecastHeroBoost: "к темпу",
+  forecastHeroSlowLead: "Кончится {from}, простой до {to}",
+  forecastHeroCut: "темпа",
+  forecastHeroTarget: "держать",
+  forecastHeroIdle: "простой",
+  forecastHeroSlowNote: "Отсюда и до {until}.",
+  forecastHeroOpenDetails: "Пока нечего считать: открой подробности.",
+  forecastTitle: "Прогноз запаса",
+  forecastHint: "Отмеченные аккаунты вместе, в долях их общей недельной ёмкости. Провайдер отдаёт только проценты, поэтому токенов здесь нет.",
+  forecastNothingTicked: "Отметь аккаунт, чтобы увидеть прогноз.",
+  forecastNoReadings: "Пока не из чего считать: ни по одному отмеченному аккаунту нет замера.",
+  forecastLoadFailed: "Не удалось загрузить прогноз.",
+  forecastReserveNow: "Запас сейчас",
+  forecastUsableNow: "Можно потратить сразу",
+  forecastPace: "Недавний темп",
+  forecastPaceValue: "{pace}% / ч",
+  forecastAccuracy: "Точность: {level}",
+  forecastLevelHigh: "высокая",
+  forecastLevelMedium: "средняя",
+  forecastLevelLow: "низкая",
+  forecastLevelNone: "данных мало",
+  forecastBand: "±{pct}% {basis}",
+  forecastBasisBacktest: "(насколько темп прошлых дней расходился со следующими)",
+  forecastBasisRule: "(грубое правило по длине истории)",
+  forecastHistory: "история {hours}",
+  forecastHistoryRange: "история от {from} до {to}",
+  forecastHistoryNone: "истории пока нет",
+  forecastHistoryUnderHour: "меньше часа",
+  forecastReadoutNow: "Сейчас: запас {reserve}, можно потратить {usable}",
+  forecastReadoutAt: "{at}: запас {reserve} ({low}–{high}), можно потратить {usable}",
+  forecastLegendReserve: "Прогноз запаса",
+  forecastLegendBand: "Разброс при быстром и медленном темпе",
+  forecastLegendUsable: "Можно потратить в этот момент с учётом 5-часовых окон",
+  forecastLegendIdle: "Простой: ни у одного отмеченного аккаунта нет места",
+  forecastLegendReset: "Недельный сброс",
+  forecastSlowTitle: "Притормози",
+  forecastSlowLater: "Если отложить до {at}, сбавлять придётся на {cut}.",
+  forecastSpeedTitle: "Можно прибавить",
+  forecastSpeedLimited: "Упирается в 5-часовые окна: остальное сгорит, как ни старайся.",
+  forecastIdleNowTitle: "Сейчас места нет",
+  forecastIdleNowBody: "Ни один отмеченный аккаунт не примет работу до {until}.",
+  forecastOnTrackTitle: "Идёшь ровно",
+  forecastOnTrackBody: "В таком темпе простоя не ожидается, и на сбросах ничего заметного не сгорит.",
+  forecastTooLittle: "Пока не из чего вывести темп. График показывает запас как он есть.",
+  forecastIdleHeading: "Ожидаемый простой",
+  forecastNoIdle: "Не ожидается.",
+  forecastIdleSpell: "{from} – {to} ({length}, {cause})",
+  forecastIdleWeekly: "недели выбраны",
+  forecastIdleShort: "5-часовые окна выбраны",
+  forecastWeekReset: "Сброс недели {at}",
+  forecastWeekIdle: "Неделя не началась",
+  forecastFiveReset: "сброс 5 часов {at}",
+  forecastFiveIdle: "5 часов не начаты",
+  forecastNoFive: "без 5-часового окна",
+  forecastLeftAtReset: "Прогноз остатка к сбросу: {pct} его недели",
+  forecastEmptyAt: "Его неделя кончится {at}, раньше сброса",
+  forecastSpendable: "До сброса реально потратить: {pct} его недели",
+  forecastSpendableShort: "До сброса реально потратить только {pct} его недели: упирается в 5-часовые окна",
+  forecastBasisLine: "Темп {pace}% его недели / ч ({source})",
+  forecastSourceHistory: "за последние 24 ч",
+  forecastSourceBlend: "свежие замеры и среднее за неделю",
+  forecastSourceAverage: "среднее с начала недели",
+  forecastSourceNone: "пока не из чего считать",
+  forecastCostMeasured: "5-часовое окно стоит {pct} недели, измерено",
+  forecastCostAssumed: "5-часовое окно стоит примерно {pct} недели, допущение",
+  forecastCapacitySame: "тот же тариф, что у остальных",
+  forecastCapacityPlan: "ёмкость ×{n} по тарифу",
+  forecastCapacityManual: "ёмкость ×{n} задана вручную",
+  forecastCapacityHeading: "Ёмкость",
+  forecastCapacityHint: "Насколько велики лимиты аккаунта, в кратных тарифу Pro. Авто берёт это из тарифа, если тариф об этом говорит.",
+  forecastCapacityShow: "Задать ёмкости",
+  forecastCapacityHide: "Скрыть ёмкости",
+  forecastCapacityAuto: "Авто",
+  forecastOutLine: "{account} не учтён: {reason}",
+  forecastOutNoMeter: "у провайдера нет счётчика",
+  forecastOutNoReading: "не удалось прочитать лимиты",
+  forecastOutNoWeek: "нет недельного окна",
+  forecastOutNoReset: "провайдер не дал время сброса недели",
+  forecastOutNoCapacity: "размер тарифа неизвестен: задай ёмкость выше",
+  forecastAssumptionsHeading: "На чём это держится",
+  forecastAssumePercentOnly: "Провайдер отдаёт только проценты и время сброса, поэтому токенов здесь нет.",
+  forecastAssumeSteadyPace: "Считается, что недавний темп сохранится.",
+  forecastAssumeEarliestFirst: "Считается, что работа идёт на аккаунт, у которого неделя сбросится раньше всех.",
+  forecastAssumeSpendCeiling: "«Реально потратить» ограничено только окнами, а не тем, как быстро ты работаешь.",
+  forecastAssumeWindowRestarts: "После сброса новое 5-часовое окно считается начатым со следующего запроса.",
+  forecastAssumeModelLimits: "Отдельные недельные лимиты моделей (например, Opus) не учитываются и могут кончиться раньше.",
+  forecastAssumeSamePlan: "Аккаунты на одном тарифе, поэтому ёмкость считается равной.",
+  forecastAssumePlanMultiple: "Ёмкость взята из множителя тарифа к Pro. Эти множители опубликованы только для 5-часового окна, недельная ёмкость может отличаться.",
+  forecastAssumeManual: "Заданные вручную ёмкости берутся как есть.",
+  forecastAssumeWindowCost: "Сколько недели стоит 5-часовое окно, у некоторых аккаунтов ещё не измерено: взято допущение, не больше 15% недели.",
+  forecastAssumeThinHistory: "У некоторых аккаунтов замеров меньше чем за сутки: их темп смешан со средним за неделю.",
+  forecastAssumeNoHistory: "У некоторых аккаунтов замеров почти нет: их темп взят как среднее с начала недели.",
+  forecastAssumeOldReadings: "Часть замеров старше двух часов.",
 };
 
 const uk: Strings = {
@@ -408,6 +758,11 @@ const uk: Strings = {
   usageUnsupported: "залишок для цього провайдера не читається",
   usageUnknownAccount: "Цього акаунта більше немає.",
   usageReadFailed: "Не вдалося прочитати ліміти.",
+  usageRateLimited: "Сервіс лімітів обмежив запити, повторю після паузи.",
+  usageTimedOut: "Замір не встиг завершитися.",
+  usageNetworkFailed: "Немає зв’язку із сервісом лімітів",
+  usageNoToken: "У цій теці немає входу в Claude.",
+  usageBadKeychain: "Збережений вхід цієї теки не читається.",
   claudeNotFound: "Не знайшов команду claude, тому жоден акаунт не перевірено. Встанови Claude Code або запусти Paseo з термінала.",
   apiKeyOverride: "В оточенні Paseo задано {var}, тому Claude Code використовує його, а не обраний тут акаунт. Прибери його, щоб перемикання працювало.",
   pillNoAccount: "Без акаунта",
@@ -445,7 +800,7 @@ const uk: Strings = {
   noAccountsDetail: "Увійди в перший — і чати зможуть перемикатися між підписками.",
   settingsTitle: "Акаунти",
   languageLabel: "Мова",
-  languageAuto: "Як у системі",
+  languageAuto: "Як у Paseo",
   showPill: "Пілюля над чатами",
   showPillHint: "Кільце й цифра акаунта в композері кожного чату Claude. Перемикання робиться там.",
   settingsHint: "Зміни застосовуються одразу.",
@@ -472,6 +827,7 @@ const uk: Strings = {
   restore: "Повернути",
   restoreFailed: "Не вдалося повернути.",
   moveAllChats: "Перевести всі чати сюди",
+  newChatsHere: "Нові чати сюди",
   moveAllConfirm: "Натисни ще раз",
   moveAllRunning: "Переводжу…",
   moveAllDone: "Переведено: {moved}",
@@ -502,8 +858,145 @@ const uk: Strings = {
   perWorkspaceLabel: "Один акаунт на задачу",
   perWorkspaceHint: "Перший вибір Авто у воркспейсі діє на всі його нові чати, доки не зміниться акаунт за замовчуванням. Вимкнено: кожен новий чат обирається окремо.",
   autoNowBadge: "Авто · зараз",
-  newChatsHint: "Авто обирає акаунт за лімітами під час відкриття кожного чату. Той самий вибір, що й кнопка акаунтів у шапці воркспейсу.",
+  unitSec: "с",
+  refreshIntervalLabel: "Автооновлення",
+  refreshIntervalHint: "Як часто акаунти вимірюються заново, поки відкрито Paseo. На зовсім короткому інтервалі можна впертися в обмеження запитів сервісу лімітів.",
+  refreshAccount: "Оновити цей акаунт",
+  refreshAllAccounts: "Оновити всі акаунти",
+  updatedAgo: "{ago} тому",
+  updatedJustNow: "щойно",
+  refreshHeld: "Сервіс лімітів попросив зачекати {wait}",
+  savedDataNote: "Збережені дані від {time} · оновлюю…",
+  savedDataFailed: "Збережені дані від {time}",
+  forecastMore: "Детальніше: графік, акаунти, припущення",
+  forecastLess: "Згорнути",
+  forecastHeroSpeedLead: "{account}: використай його першим",
+  forecastHeroSpeedNote: "З {from} можна встигнути витратити ще {extra} його тижня.",
+  forecastHeroLost: "згорить",
+  forecastHeroReset: "скидання",
+  forecastHeroBoost: "до темпу",
+  forecastHeroSlowLead: "Скінчиться {from}, простій до {to}",
+  forecastHeroCut: "темпу",
+  forecastHeroTarget: "тримати",
+  forecastHeroIdle: "простій",
+  forecastHeroSlowNote: "Звідси й до {until}.",
+  forecastHeroOpenDetails: "Поки нічого рахувати: відкрий деталі.",
+  forecastTitle: "Прогноз запасу",
+  forecastHint: "Позначені акаунти разом, у частках їхньої спільної тижневої ємності. Провайдер віддає лише відсотки, тому токенів тут немає.",
+  forecastNothingTicked: "Познач акаунт, щоб побачити прогноз.",
+  forecastNoReadings: "Поки немає з чого рахувати: жоден позначений акаунт не має заміру.",
+  forecastLoadFailed: "Не вдалося завантажити прогноз.",
+  forecastReserveNow: "Запас зараз",
+  forecastUsableNow: "Можна витратити одразу",
+  forecastPace: "Нещодавній темп",
+  forecastPaceValue: "{pace}% / год",
+  forecastAccuracy: "Точність: {level}",
+  forecastLevelHigh: "висока",
+  forecastLevelMedium: "середня",
+  forecastLevelLow: "низька",
+  forecastLevelNone: "даних замало",
+  forecastBand: "±{pct}% {basis}",
+  forecastBasisBacktest: "(наскільки темп минулих днів розходився з наступними)",
+  forecastBasisRule: "(грубе правило за довжиною історії)",
+  forecastHistory: "історія {hours}",
+  forecastHistoryRange: "історія від {from} до {to}",
+  forecastHistoryNone: "історії поки немає",
+  forecastHistoryUnderHour: "менше години",
+  forecastReadoutNow: "Зараз: запас {reserve}, можна витратити {usable}",
+  forecastReadoutAt: "{at}: запас {reserve} ({low}–{high}), можна витратити {usable}",
+  forecastLegendReserve: "Прогноз запасу",
+  forecastLegendBand: "Розкид за швидшого й повільнішого темпу",
+  forecastLegendUsable: "Можна витратити цієї миті з огляду на 5-годинні вікна",
+  forecastLegendIdle: "Простій: жоден позначений акаунт не має місця",
+  forecastLegendReset: "Тижневе скидання",
+  forecastSlowTitle: "Пригальмуй",
+  forecastSlowLater: "Якщо відкласти до {at}, знижувати доведеться на {cut}.",
+  forecastSpeedTitle: "Можна додати",
+  forecastSpeedLimited: "Упирається в 5-годинні вікна: решта згорить, хоч як старайся.",
+  forecastIdleNowTitle: "Зараз місця немає",
+  forecastIdleNowBody: "Жоден позначений акаунт не прийме роботу до {until}.",
+  forecastOnTrackTitle: "Йдеш рівно",
+  forecastOnTrackBody: "У такому темпі простою не очікується, і на скиданнях нічого помітного не згорить.",
+  forecastTooLittle: "Поки немає з чого вивести темп. Графік показує запас як він є.",
+  forecastIdleHeading: "Очікуваний простій",
+  forecastNoIdle: "Не очікується.",
+  forecastIdleSpell: "{from} – {to} ({length}, {cause})",
+  forecastIdleWeekly: "тижні вичерпано",
+  forecastIdleShort: "5-годинні вікна вичерпано",
+  forecastWeekReset: "Скидання тижня {at}",
+  forecastWeekIdle: "Тиждень не почався",
+  forecastFiveReset: "скидання 5 годин {at}",
+  forecastFiveIdle: "5 годин не почато",
+  forecastNoFive: "без 5-годинного вікна",
+  forecastLeftAtReset: "Прогноз залишку до скидання: {pct} його тижня",
+  forecastEmptyAt: "Його тиждень скінчиться {at}, раніше за скидання",
+  forecastSpendable: "До скидання реально витратити: {pct} його тижня",
+  forecastSpendableShort: "До скидання реально витратити лише {pct} його тижня: упирається в 5-годинні вікна",
+  forecastBasisLine: "Темп {pace}% його тижня / год ({source})",
+  forecastSourceHistory: "за останні 24 год",
+  forecastSourceBlend: "свіжі заміри й середнє за тиждень",
+  forecastSourceAverage: "середнє з початку тижня",
+  forecastSourceNone: "поки немає з чого рахувати",
+  forecastCostMeasured: "5-годинне вікно коштує {pct} тижня, виміряно",
+  forecastCostAssumed: "5-годинне вікно коштує приблизно {pct} тижня, припущення",
+  forecastCapacitySame: "той самий тариф, що в інших",
+  forecastCapacityPlan: "ємність ×{n} за тарифом",
+  forecastCapacityManual: "ємність ×{n} задано вручну",
+  forecastCapacityHeading: "Ємність",
+  forecastCapacityHint: "Наскільки великі ліміти акаунта, у кратних тарифу Pro. Авто бере це з тарифу, якщо тариф про це каже.",
+  forecastCapacityShow: "Задати ємності",
+  forecastCapacityHide: "Сховати ємності",
+  forecastCapacityAuto: "Авто",
+  forecastOutLine: "{account} не враховано: {reason}",
+  forecastOutNoMeter: "провайдер не має лічильника",
+  forecastOutNoReading: "не вдалося прочитати ліміти",
+  forecastOutNoWeek: "немає тижневого вікна",
+  forecastOutNoReset: "провайдер не дав час скидання тижня",
+  forecastOutNoCapacity: "розмір тарифу невідомий: задай ємність вище",
+  forecastAssumptionsHeading: "На чому це тримається",
+  forecastAssumePercentOnly: "Провайдер віддає лише відсотки й час скидання, тому токенів тут немає.",
+  forecastAssumeSteadyPace: "Вважається, що нещодавній темп збережеться.",
+  forecastAssumeEarliestFirst: "Вважається, що робота йде на акаунт, у якого тиждень скинеться найраніше.",
+  forecastAssumeSpendCeiling: "«Реально витратити» обмежено лише вікнами, а не тим, як швидко ти працюєш.",
+  forecastAssumeWindowRestarts: "Після скидання нове 5-годинне вікно вважається розпочатим із наступного запиту.",
+  forecastAssumeModelLimits: "Окремі тижневі ліміти моделей (наприклад, Opus) не враховуються і можуть скінчитися раніше.",
+  forecastAssumeSamePlan: "Акаунти на одному тарифі, тому ємність вважається рівною.",
+  forecastAssumePlanMultiple: "Ємність узято з множника тарифу до Pro. Ці множники опубліковано лише для 5-годинного вікна, тижнева ємність може відрізнятися.",
+  forecastAssumeManual: "Задані вручну ємності беруться як є.",
+  forecastAssumeWindowCost: "Скільки тижня коштує 5-годинне вікно, у деяких акаунтів ще не виміряно: узято припущення, не більше 15% тижня.",
+  forecastAssumeThinHistory: "У деяких акаунтів замірів менш ніж за добу: їхній темп змішано із середнім за тиждень.",
+  forecastAssumeNoHistory: "У деяких акаунтів замірів майже немає: їхній темп узято як середнє з початку тижня.",
+  forecastAssumeOldReadings: "Частина замірів старша за дві години.",
 };
+
+/** Failures the daemon reports in English, since it does not know who is reading. */
+export const USAGE_RATE_LIMITED = "rate limited by the usage endpoint";
+export const USAGE_NOT_IN_TIME = "the reading did not finish in time";
+export const USAGE_NO_TOKEN = "this config directory has no claude.ai token";
+export const USAGE_BAD_KEYCHAIN = "the Keychain item for this config directory is not JSON";
+
+/** A failure from the daemon in the reader's language, where it is one of ours or the network's. */
+export function usageErrorText(raw: string, strings: Strings): string {
+  if (raw === USAGE_RATE_LIMITED) return strings.usageRateLimited;
+  if (raw === USAGE_NOT_IN_TIME) return strings.usageTimedOut;
+  if (raw === USAGE_NO_TOKEN) return strings.usageNoToken;
+  if (raw === USAGE_BAD_KEYCHAIN) return strings.usageBadKeychain;
+  const network = /^fetch failed(?: \((.+)\))?$/.exec(raw);
+  if (network === null) return raw;
+  return network[1] === undefined ? strings.usageNetworkFailed : `${strings.usageNetworkFailed} (${network[1]})`;
+}
+
+/**
+ * The language for "same as Paseo". `host` is what Paseo says it runs in (0.15 and newer, null
+ * before), `setting` its saved language where that can be read, null for "system" or unknown.
+ * A language this catalogue lacks reads English. Paseo has no Ukrainian: on a Ukrainian device
+ * left on "system" it falls back to English, and the plugin, which has Ukrainian, need not.
+ */
+export function pickLocale(host: string | null, setting: string | null, device: Locale): Locale {
+  if (host === null) return setting === null ? device : resolveLocale(setting);
+  const locale = resolveLocale(host);
+  return locale === "en" && setting === null && device === "uk" ? "uk" : locale;
+}
 
 /** Maps a locale tag to a catalogue entry: `ru-RU`, `ru` and `ru_RU.UTF-8` all give `ru`. */
 export function resolveLocale(tag: string): Locale {

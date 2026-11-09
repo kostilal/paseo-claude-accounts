@@ -6,6 +6,7 @@ import { isClaudeNotFound } from "./discover.ts";
 import { chooseUsageHome, groupByLogin, type LoginCandidate } from "./groupLogins.ts";
 import { usageForLogin, usageOrder } from "./groupUsage.ts";
 import { type ProfileIdentity, ownLogin } from "./profile.ts";
+import type { UsageInfo } from "./limits.ts";
 import type { UsageResult } from "./usage.ts";
 
 export interface PillInput {
@@ -26,6 +27,8 @@ export interface PillDeps {
   authorised(home: string): boolean;
   /** The allowance for one account's directory, or a blank result when it is not known. */
   usageFor(home: string, manual: boolean): Promise<UsageResult>;
+  /** When a directory's reading was measured, for the row's age. */
+  info?(home: string): UsageInfo | null;
   /** Who a Claude directory's own login belongs to, asked of Anthropic; see server/profile.ts.
    *  Absent, or null: the identity `identify` reported stands. */
   profile?(home: string): Promise<ProfileIdentity | null>;
@@ -95,11 +98,18 @@ export async function pillStateFor(input: PillInput, deps: PillDeps): Promise<Pi
       const landsOn = group.switchTo !== "" ? group.switchTo : group.accountIds[0]!;
       const landsOnAccount = accountById(registry, landsOn);
       const mechanism = PROVIDERS[landsOnAccount?.provider ?? "claude"];
+      // The directory that answered, whose reading the row's age is.
+      const answered = new Map<UsageResult, string>();
       const usage = !(mechanism?.meterable ?? true)
         ? unmeterable
         : !group.loggedIn
           ? noUsage
-          : await usageForLogin(usageOrder(group, homeOf, preferred), (home) => deps.usageFor(home, input.manual));
+          : await usageForLogin(usageOrder(group, homeOf, preferred), async (home) => {
+              const reading = await deps.usageFor(home, input.manual);
+              answered.set(reading, home);
+              return reading;
+            });
+      const from = answered.get(usage);
       return {
         label: landsOnAccount?.label ?? landsOn,
         provider: landsOnAccount?.provider ?? "claude",
@@ -116,6 +126,7 @@ export async function pillStateFor(input: PillInput, deps: PillDeps): Promise<Pi
         usage: usage.state,
         fiveHour: usage.fiveHour,
         sevenDay: usage.sevenDay,
+        usageAt: from === undefined ? null : (deps.info?.(from)?.measuredAt ?? null),
       };
     }),
   );

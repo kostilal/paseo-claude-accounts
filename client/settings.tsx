@@ -14,6 +14,9 @@ import { Banner } from "./ui.tsx";
 /** The select's value for "no default"; account ids are slugs, never this. */
 const NONE = "";
 
+/** Minutes offered for the auto-refresh interval. */
+const REFRESH_CHOICES = [5, 10, 15, 30, 60];
+
 /** Settings → Plugins → Accounts: the language, whether the pill shows, and the account new
  *  chats open on (one account, or picked by allowance as each opens). */
 export function AccountsSettings({ theme }: PluginSurfaceProps) {
@@ -62,6 +65,12 @@ export function AccountsSettings({ theme }: PluginSurfaceProps) {
       : []),
   ];
   const problem = current?.problem ?? "";
+  const refreshChoice = (minutes: number) => ({ label: `${minutes} ${strings.unitMin}`, value: String(minutes) });
+  const refreshChoices = [
+    ...REFRESH_CHOICES.map(refreshChoice),
+    // A value that is not offered (the file was edited by hand) still shows as what is set.
+    ...(REFRESH_CHOICES.includes(values.refreshMinutes) ? [] : [refreshChoice(values.refreshMinutes)]),
+  ];
 
   const choose = (account: string) => {
     setSaving(true);
@@ -129,6 +138,14 @@ export function AccountsSettings({ theme }: PluginSurfaceProps) {
             value={values.oneAccountPerWorkspace}
             disabled={busy}
             onValueChange={(oneAccountPerWorkspace) => save({ oneAccountPerWorkspace })}
+          />
+          <SettingsSelect
+            label={strings.refreshIntervalLabel}
+            hint={strings.refreshIntervalHint}
+            value={String(values.refreshMinutes)}
+            options={refreshChoices}
+            disabled={busy}
+            onValueChange={(minutes) => save({ refreshMinutes: Number(minutes) })}
           />
         </SettingsCard>
       </SettingsSection>

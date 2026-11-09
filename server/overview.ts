@@ -9,6 +9,7 @@ import { chooseUsageHome, groupByLogin, type LoginCandidate } from "./groupLogin
 import { usageForLogin, usageOrder } from "./groupUsage.ts";
 import { type ProfileIdentity, ownLogin } from "./profile.ts";
 import type { ProjectRow } from "./projects.ts";
+import type { UsageInfo } from "./limits.ts";
 import type { UsageResult } from "./usage.ts";
 
 /** Project paths, for per-project `.claude-data` discovery. */
@@ -22,6 +23,7 @@ export interface UsageReader {
   stale(dir: string, force?: boolean): boolean;
   cached(dir: string): UsageResult | null;
   measure(dir: string, defaultDir: string, manual: boolean): Promise<UsageResult>;
+  info(dir: string): UsageInfo | null;
 }
 
 export interface OverviewDeps {
@@ -117,6 +119,7 @@ export function createOverview(deps: OverviewDeps) {
         email: group.email,
         orgName: group.orgName,
         subscriptionType: group.plan,
+        rateLimitTier: group.rateLimitTier,
         accountIds: group.accountIds,
         switchTo: group.switchTo,
         isDefault: group.accountIds.includes(registry.defaults?.[landsOn?.provider ?? "claude"] ?? ""),
@@ -126,6 +129,8 @@ export function createOverview(deps: OverviewDeps) {
         sevenDay: null,
         usageErrorCode: "" as const,
         usageError: "",
+        usageAt: null,
+        heldUntil: null,
       };
     });
 
@@ -163,13 +168,23 @@ export function createOverview(deps: OverviewDeps) {
             )
           : [account.home];
         try {
-          const result = await usageForLogin(homes, measure);
+          // The directory that answered, whose reading the row's age and hold are.
+          const answered = new Map<UsageResult, string>();
+          const result = await usageForLogin(homes, async (home) => {
+            const reading = await measure(home);
+            answered.set(reading, home);
+            return reading;
+          });
+          const from = answered.get(result);
+          const info = from === undefined ? null : deps.usage.info(from);
           return {
             ...account,
             usage: result.state,
             fiveHour: result.fiveHour,
             sevenDay: result.sevenDay,
             usageError: result.error,
+            usageAt: info?.measuredAt ?? null,
+            heldUntil: info?.heldUntil ?? null,
           };
         } catch (error) {
           log(`accounts: no usage for ${account.id}: ${message(error)}`);
@@ -234,6 +249,9 @@ export function createUsageRow(deps: UsageRowDeps) {
         sevenDay: null,
         usageErrorCode: "unknown-account" as const,
         usageError: "",
+        usageAt: null,
+        heldUntil: null,
+        rateLimitTier: "",
       };
     }
     // Both read fresh, since a person asked. Providers without a meter are not measured,
@@ -245,6 +263,7 @@ export function createUsageRow(deps: UsageRowDeps) {
         ? deps.usage.measure(account, deps.defaultDir(), true)
         : Promise.resolve({ state: "unsupported" as const, fiveHour: null, sevenDay: null, error: "" }),
     ]);
+    const info = meterable ? deps.usage.info(account) : null;
     return {
       id: account,
       name: displayName(account),
@@ -265,6 +284,9 @@ export function createUsageRow(deps: UsageRowDeps) {
       sevenDay: result.sevenDay,
       usageErrorCode: "" as const,
       usageError: result.error,
+      usageAt: info?.measuredAt ?? null,
+      heldUntil: info?.heldUntil ?? null,
+      rateLimitTier: "",
     };
   };
 }

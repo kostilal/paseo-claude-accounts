@@ -2,9 +2,10 @@ Claude Accounts lets you run Paseo chats on more than one Claude subscription an
 
 ## What you get
 
-- **A pill above every Claude chat** showing which account the chat runs on and the fuller of its two windows, the 5 hours or the week: the time until that window resets and how much of it is used (`3d 62%`: three days to go, 62% used). Pressing it lists every account with its 5-hour and weekly allowance, and switches the chat with one more press.
-- **An Accounts screen** in the sidebar listing every login found on the machine, grouped by subscription, with usage bars, a login button for accounts that are signed out, and a button to add a new account.
-- **The right account from the start.** New chats open on the account you choose, so they need no switch later: a default account, or **Auto**, which picks by the 5-hour and weekly allowance left (the account whose week resets soonest, while it has room). The **Users** button in the workspace header sets that default; the pill above a chat switches that one chat. On the new-workspace screen **+** → **Claude account** picks the first chat's account. With **One account per task** on (Settings), every chat of a workspace stays on Auto's first pick. Scripts can set `PASEO_CLAUDE_ACCOUNT`.
+- **A pill above every Claude chat** showing which account the chat runs on and the fuller of its two windows, the 5 hours or the week: the time until that window resets and how much of it is used (`3d 62%`: three days to go, 62% used). Pressing it lists every account with its 5-hour and weekly allowance, switches the chat with one more press, and has small round buttons that re-measure one account or all of them.
+- **An Accounts screen** in the sidebar listing every login found on the machine, grouped by subscription, with usage bars, a login button for accounts that are signed out, and a button to add a new account. It opens at once on the last data it was given, saved by the daemon, and updates in place while it measures.
+- **A forecast** on that screen over the accounts you tick: their combined reserve over time with every reset at its exact moment, the idle time to expect, and hints both ways: when and by how much to slow down, and which account to use first when its week would be lost at its reset. Reserve is a share of their combined capacity; the provider reports percentages, so nothing is shown as tokens. Assumptions, missing history and accuracy are stated on the screen.
+- **The right account from the start.** New chats open on the account you choose, so they need no switch later: a default account, or **Auto**, which picks by the 5-hour and weekly allowance left (the account whose week resets soonest, while it has room). The **Users** button in the workspace header and **New chats here** on an account's card set that default; the pill above a chat switches that one chat. On the new-workspace screen **+** → **Claude account** picks the first chat's account. With **One account per task** on (Settings), every chat of a workspace stays on Auto's first pick. Scripts can set `PASEO_CLAUDE_ACCOUNT`.
 - **Ask from ChatGPT** (with Paseo God Mode): which account any chat really runs on, with its 5-hour and weekly allowance and how old the numbers are, and a move of one chat that is checked and confirmed first.
 - **Move all chats here**, on any account in that screen, moves every chat in every workspace onto it. Idle chats restart on it, closed ones switch when they next open, and chats in the middle of a turn are left alone.
 
@@ -22,9 +23,11 @@ Each account is a config directory with its own Claude login — the same login 
 ## What it reads and stores
 
 - Account list and chat bindings: `~/.paseo-claude-accounts/accounts.json`. No secrets.
+- The last Accounts screen, so it opens at once: `~/.paseo-claude-accounts/overview-snapshot.json`, readable only by you. Emails and usage figures, no secrets.
+- Eight days of usage readings for the forecast: `~/.paseo-claude-accounts/usage-history.json`, readable only by you. Percentages and reset times, taken from readings made anyway: the forecast asks the usage endpoint nothing.
 - Logins: Claude Code's own Keychain items, one per config directory. The plugin reads them to measure usage and never writes them; it stores no token of its own.
 - Who each account is: Anthropic's profile endpoint, called with the account's own login, and asked again only when that login's token changes. Claude Code rewrites the account cached in a project's `.claude.json` to the login its chats run on, so that cache is only the fallback.
-- Usage: Anthropic's usage endpoint, called with each config directory's own Claude Code credentials, at most every ten minutes per account. When those credentials have expired, the plugin runs `claude -p /usage` in that directory so Claude Code refreshes them itself; this makes no model call.
+- Usage: Anthropic's usage endpoint, called with each config directory's own Claude Code credentials, as often as the Auto-refresh setting says, every ten minutes per account by default. When those credentials have expired, the plugin runs `claude -p /usage` in that directory so Claude Code refreshes them itself; this makes no model call.
 
 ## Limits
 

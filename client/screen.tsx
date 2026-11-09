@@ -1,7 +1,7 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { useRpc, type PluginSurfaceProps } from "@getpaseo/plugin/client";
 import { Modal } from "@getpaseo/plugin/client/react-native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import {
@@ -10,18 +10,19 @@ import {
   listAccounts,
   loginAccount,
   removeAccount,
+  snapshotRpc,
   unhideAccount,
   type AccountView,
   type HiddenView,
 } from "../shared/accounts.ts";
 import { loginLabel } from "../shared/identity.ts";
 import { switchAllRpc } from "../shared/switch.ts";
-import { getDefaultRpc, setDefaultRpc } from "../shared/defaults.ts";
-import { AUTO } from "../shared/registry.ts";
-import type { Strings } from "../shared/i18n.ts";
-import { useStrings } from "./locale.ts";
+import { setDefaultRpc } from "../shared/defaults.ts";
+import { type Strings, usageErrorText } from "../shared/i18n.ts";
+import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { PROVIDERS, type ProviderId, providerForHome } from "../shared/providers.ts";
-import { formatWait, providerName, tightestOf } from "./format.ts";
+import { formatWait, providerName, savedAtText, tightestOf } from "./format.ts";
+import { ForecastCard } from "./forecast.tsx";
 import { revealNotice } from "./reveal-notice.ts";
 import { AccountRing } from "./ring.tsx";
 import { typeScale } from "./typography.ts";
@@ -150,62 +151,13 @@ function moveAllSummary(
   return parts.join(" · ");
 }
 
-/**
- * The account every new Claude chat opens on, the same choice as the workspace header's button:
- * Auto, or one login. Shown above the logins so the screen says what new chats will do.
- */
-function NewChatsCard({
-  theme,
-  strings,
-  rows,
-  onChanged,
-}: {
-  theme: PluginTheme;
-  strings: Strings;
-  rows: AccountView[];
-  onChanged: () => void;
-}) {
-  const askDefault = useRpc(getDefaultRpc);
-  const saveDefault = useRpc(setDefaultRpc);
-  const queryClient = useQueryClient();
-  const key = ["accounts", "default-setting"];
-  const { data } = useQuery({ queryKey: key, queryFn: () => askDefault({ provider: "claude" }), refetchInterval: 30_000 });
-  const choose = useMutation({
-    mutationFn: (account: string) => saveDefault({ provider: "claude", account }),
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: key });
-      onChanged();
-    },
-  });
-  const current = data?.account ?? "";
-  const logins = rows.filter((row) => row.provider === "claude" && row.loggedIn && row.switchTo !== "");
-  const failed = choose.isError || (choose.data !== undefined && choose.data.code !== "");
-  return (
-    <Card theme={theme}>
-      <Text style={{ ...typeScale.title, color: theme.colors.foreground }}>{strings.workspaceTitle}</Text>
-      <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }}>{strings.newChatsHint}</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <Chip
-          theme={theme}
-          label={strings.workspaceAutoNone}
-          selected={current === AUTO}
-          disabled={choose.isPending || data === undefined}
-          onPress={() => choose.mutate(AUTO)}
-        />
-        {logins.map((row) => (
-          <Chip
-            key={row.id}
-            theme={theme}
-            label={row.email || row.name}
-            selected={current !== AUTO && row.accountIds.includes(current)}
-            disabled={choose.isPending || data === undefined}
-            onPress={() => choose.mutate(row.switchTo)}
-          />
-        ))}
-      </View>
-      {failed && <Banner theme={theme} tone="bad" text={strings.defaultSettingFailed} />}
-    </Card>
-  );
+/** "New chats here" on a card: makes that login the one new chats of its provider open on. */
+interface NewChatsState {
+  /** Whether the row can be chosen and is not the default already. */
+  available: boolean;
+  pending: boolean;
+  failed: boolean;
+  onPress: () => void;
 }
 
 function LoginCard({
@@ -218,6 +170,7 @@ function LoginCard({
   onLogIn,
   deleting,
   moving,
+  newChats,
 }: {
   theme: PluginTheme;
   row: AccountView;
@@ -228,6 +181,7 @@ function LoginCard({
   onLogIn: () => void;
   deleting: DeleteState;
   moving: MoveAllState;
+  newChats: NewChatsState;
 }) {
   const title = loginTitle(row, strings);
   const tightest = tightestOf(row.fiveHour, row.sevenDay);
@@ -295,7 +249,7 @@ function LoginCard({
         <Banner theme={theme} tone="bad" text={strings.usageUnknownAccount} />
       )}
       {revealFailure === null && row.usageErrorCode === "" && row.usageError !== "" && (
-        <Banner theme={theme} tone="bad" text={row.usageError} />
+        <Banner theme={theme} tone="bad" text={usageErrorText(row.usageError, strings)} />
       )}
       {row.loggedIn && row.usage === "none" && (
         <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }}>{strings.noUsageAllowance}</Text>
@@ -311,10 +265,14 @@ function LoginCard({
         {(!row.loggedIn || row.usage === "expired") && (
           <Button theme={theme} label={strings.logIn} variant="ghost" disabled={logIn.isPending} onPress={onLogIn} />
         )}
+        {newChats.available && (
+          <Button theme={theme} label={strings.newChatsHere} icon="MessageSquarePlus" variant="ghost" disabled={newChats.pending} onPress={newChats.onPress} />
+        )}
         <MoveAllButton theme={theme} state={moving} />
         <DeleteButton theme={theme} strings={strings} state={deleting} />
       </View>
       <DeleteConfirm theme={theme} strings={strings} state={deleting} question={strings.deleteConfirm} />
+      {newChats.failed && <Banner theme={theme} tone="bad" text={strings.defaultSettingFailed} />}
       {loginState !== null && <Banner theme={theme} tone={loginState.tone} text={loginState.text} />}
     </Card>
   );
@@ -322,24 +280,43 @@ function LoginCard({
 
 export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
   const strings = useStrings();
+  const { language } = usePreferences();
+  const locale = language === "auto" ? detectAppLocale() : language;
   const fetchOverview = useRpc(listAccounts);
+  const fetchSnapshot = useRpc(snapshotRpc);
   const askUsage = useRpc(fetchUsage);
   const startLogin = useRpc(loginAccount);
   const doConnect = useRpc(connectAccount);
   const doRemove = useRpc(removeAccount);
   const doUnhide = useRpc(unhideAccount);
   const doMoveAll = useRpc(switchAllRpc);
+  const saveDefault = useRpc(setDefaultRpc);
   const queryClient = useQueryClient();
   const overviewKey = ["accounts", "overview"];
   // Logins run in a terminal the screen cannot observe, so for a few minutes after one
   // starts the list is polled faster and bypasses the identity cache.
   const [watchUntil, setWatchUntil] = useState(0);
   const watching = Date.now() < watchUntil;
-  const { data, isError, error, refetch } = useQuery({
+  // Polling waits while a forced read runs; the read's own invalidation refetches when it is done.
+  const reloading = useIsMutating({ mutationKey: ["accounts", "reload"] }) > 0;
+  const { data: live, isError, error, refetch } = useQuery({
     queryKey: overviewKey,
     queryFn: () => fetchOverview({ refresh: watching, force: false }),
-    refetchInterval: watching ? 8_000 : 30_000,
+    gcTime: Infinity,
+    refetchInterval: reloading ? false : watching ? 8_000 : 30_000,
   });
+  // The daemon's saved overview, so a cold screen opens on data instead of skeletons. Asked once;
+  // a failure only means there is none to show. Live data replaces it in place, rows keeping
+  // their keys, so nothing below may depend on which of the two is on screen.
+  const { data: snapshot } = useQuery({
+    queryKey: ["accounts", "snapshot"],
+    queryFn: () => fetchSnapshot({}),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: 1,
+  });
+  const data = live ?? snapshot?.overview ?? undefined;
+  const onSnapshot = live === undefined && data !== undefined;
   const invalidate = () => {
     setWatchUntil(Date.now() + 5 * 60_000);
     void queryClient.invalidateQueries({ queryKey: overviewKey });
@@ -350,6 +327,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
   // ordinary read. Writing the forced result directly would race in-flight polls and deletes.
   // Awaited so the button stays busy until the screen has updated.
   const reload = useMutation({
+    mutationKey: ["accounts", "reload"],
     mutationFn: () => fetchOverview({ refresh: true, force: true }),
     onSuccess: async () => {
       void queryClient.invalidateQueries({ queryKey: ["accounts", "pill"] });
@@ -427,6 +405,21 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
     const timer = setTimeout(() => setArmed(null), 5_000);
     return () => clearTimeout(timer);
   }, [armed]);
+  // Keyed by row `id`. Awaited so the button stays busy until the card shows the new default.
+  const makeDefault = useMutation({
+    mutationFn: (input: { row: string; provider: string; account: string }) => saveDefault({ provider: input.provider, account: input.account }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+  });
+  const newChatsState = (row: AccountView): NewChatsState => {
+    const mine = makeDefault.variables?.row === row.id && !makeDefault.isPending;
+    return {
+      available: row.registered && row.loggedIn && row.switchTo !== "" && !row.isDefault,
+      pending: makeDefault.isPending,
+      failed: mine && (makeDefault.isError || (makeDefault.data !== undefined && makeDefault.data.code !== "")),
+      onPress: () => makeDefault.mutate({ row: row.id, provider: row.provider, account: row.switchTo }),
+    };
+  };
+
   const moveAll = useMutation({
     mutationFn: (input: { row: string; account: string }) => doMoveAll({ account: input.account }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["accounts", "pill"] }),
@@ -488,6 +481,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
   // A registered directory with no login is not an account, so it gets no row; a discovered
   // directory for a login already listed is not a suggestion.
   const registered = (data?.accounts ?? []).filter((account) => account.registered && account.loggedIn);
+  const metered = registered.filter((account) => account.provider === "claude");
   const knownKeys = new Set(registered.map((account) => account.key));
   const suggested = (data?.accounts ?? []).filter((account) => !account.registered && !knownKeys.has(account.key));
 
@@ -522,6 +516,11 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
           action={{ label: strings.retry, onPress: () => reload.mutate() }}
         />
       )}
+      {onSnapshot && snapshot?.savedAt != null && (
+        <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }}>
+          {(isError ? strings.savedDataFailed : strings.savedDataNote).replace("{time}", savedAtText(snapshot.savedAt, Date.now(), locale))}
+        </Text>
+      )}
 
       {data !== undefined ? (
         <>
@@ -538,9 +537,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
             <Banner theme={theme} tone="bad" text={strings.apiKeyOverride.replace("{var}", data.overridingVar)} />
           )}
 
-          {registered.some((row) => row.provider === "claude") && (
-            <NewChatsCard theme={theme} strings={strings} rows={registered} onChanged={invalidate} />
-          )}
+          {metered.length > 0 && <ForecastCard theme={theme} layout={layout} strings={strings} locale={locale} rows={metered} />}
 
           {registered.length === 0 ? (
             <Card theme={theme}>
@@ -563,6 +560,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
                   onLogIn={() => logIn.mutate(row.id)}
                   deleting={deleteState(row)}
                   moving={moveAllState(row)}
+                  newChats={newChatsState(row)}
                 />
               ))}
               <View style={{ flexDirection: "row" }}>{addButton}</View>

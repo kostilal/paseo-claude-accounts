@@ -25,6 +25,8 @@ export interface LoginGroup {
   orgName: string;
   /** `Identity.subscriptionType`. */
   plan: string;
+  /** `Identity.rateLimitTier`; "" when the profile did not say. */
+  rateLimitTier: string;
   /** Every registry account whose directory holds this login, sorted. */
   accountIds: string[];
   /** The account a press switches to. Empty exactly when `loggedIn` is false. */
@@ -83,6 +85,7 @@ export function groupByLogin(directories: readonly LoginCandidate[], context: Sw
       email: identity.email,
       orgName: identity.orgName,
       plan: identity.subscriptionType,
+      rateLimitTier: identity.rateLimitTier ?? "",
       accountIds,
       switchTo: identity.loggedIn ? candidateId : "",
       loggedIn: identity.loggedIn,

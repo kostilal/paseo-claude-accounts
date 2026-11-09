@@ -8,7 +8,9 @@ import {
   fetchUsage,
   listAccounts,
   loginAccount,
+  refreshAccountRpc,
   removeAccount,
+  snapshotRpc,
   unhideAccount,
 } from "./shared/accounts.ts";
 import { type RefusalCode, getDefaultRpc, refusalText, setDefaultRpc } from "./shared/defaults.ts";
@@ -32,6 +34,7 @@ import {
   workspaceAccount,
 } from "./shared/registry.ts";
 import { defaultPreferences, preferences } from "./shared/settings.ts";
+import { computeForecast, forecastRpc } from "./shared/forecast.ts";
 import { claudeProvidersRpc, pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
 import { workspaceStateRpc } from "./shared/workspace.ts";
 import { ACCOUNT_RESOURCE, accountSearchRpc } from "./shared/attach.ts";
@@ -48,7 +51,8 @@ import { allConfigDirs, createDiscovery, defaultDir, displayName, jobDirFor } fr
 import { ACCOUNT_VAR, directoryExists, sessionEnv, withAskedAccount } from "./server/hook.ts";
 import { openLogin } from "./server/login.ts";
 import { createChatLimits } from "./server/chatLimits.ts";
-import { usedSummary } from "./server/limits.ts";
+import { createHistory } from "./server/history.ts";
+import { FRESH_FOR_MS, usedSummary } from "./server/limits.ts";
 import { migrateFromTokens } from "./server/migrate.ts";
 import { readMoveCheck } from "./server/moveCheck.ts";
 import { createOverview, createUsageRow } from "./server/overview.ts";
@@ -57,23 +61,30 @@ import { createProfiles, ownLogin } from "./server/profile.ts";
 import { type CliProvider, createSessionDirs } from "./server/sessionDir.ts";
 import { createSessionLedger } from "./server/sessionLedger.ts";
 import { createProjects } from "./server/projects.ts";
+import { createRefreshOne } from "./server/refreshOne.ts";
 import { reloadAgent } from "./server/reload.ts";
 import { createSerial } from "./server/serial.ts";
-import { STATE_FILE, loadRegistry, readRegistry, writeRegistry } from "./server/store.ts";
+import { createSnapshot } from "./server/snapshot.ts";
+import { OVERVIEW_SNAPSHOT_FILE, STATE_FILE, USAGE_HISTORY_FILE, loadRegistry, readRegistry, writeRegistry } from "./server/store.ts";
 import { switchAccount } from "./server/switchAccount.ts";
 import { transcriptExists, unsavedSession } from "./server/transcript.ts";
 import { listChats, switchAll } from "./server/switchAll.ts";
-import { createUsage } from "./server/usage.ts";
+import { createUsage, liveDeps } from "./server/usage.ts";
 
 export default function contribute(server: PluginServerContext) {
   const settings = server.registerSettings(preferences);
   const projects = createProjects();
-  const usage = createUsage();
+  // How long a usage reading stands, from the settings; the next poll goes by a changed value.
+  let freshForMs = FRESH_FOR_MS;
+  // Every reading taken anyway goes into the history the forecast reads; none is taken for it.
+  const history = createHistory({ path: USAGE_HISTORY_FILE });
+  const usage = createUsage({ ...liveDeps, onReading: (dir, result, measuredAt) => void history.record(dir, result, measuredAt) }, () => freshForMs);
   // Who each account's own login belongs to; discovery's answer comes from a cache that chats
   // running on another account rewrite.
   const profiles = createProfiles();
   const discovery = createDiscovery();
   const log = (line: string) => console.error(line);
+  const snapshot = createSnapshot({ path: OVERVIEW_SNAPSHOT_FILE, log });
   const overridingVar = createApiKeyCheck();
   const sessionDir = createSessionDirs();
   const families = createFamilies();
@@ -115,6 +126,7 @@ export default function contribute(server: PluginServerContext) {
       if (cached !== null && !usage.stale(home)) return cached;
       return usage.measure(home, defaultDir(), manual);
     },
+    info: (home: string) => usage.info(home),
     profile: (home: string) => profiles.identityOf(home, defaultDir()),
   };
   /** One queue for the read-modify-writes this feature adds, so chats starting together and a
@@ -168,6 +180,13 @@ export default function contribute(server: PluginServerContext) {
     const state = await settings.read().catch(() => null);
     return state !== null && state.status === "ready" ? state.values : defaultPreferences;
   }
+
+  void prefs().then((values) => {
+    freshForMs = values.refreshMinutes * MINUTE_MS;
+  });
+  const stopFollowingSettings = settings.subscribe((state) => {
+    if (state.status === "ready") freshForMs = state.values.refreshMinutes * MINUTE_MS;
+  });
 
   /** The language the daemon writes messages in: the plugin's setting, else the daemon's. */
   async function serverStrings() {
@@ -279,7 +298,14 @@ export default function contribute(server: PluginServerContext) {
   }
 
   /** The allowance of the account a chat runs on, and how old it is. */
-  const limitsOf = createChatLimits({ usage, defaultDir, siblings: sameLogin, readMs: LIMITS_READ_MS });
+  const limitsOf = createChatLimits({ usage, defaultDir, siblings: sameLogin, readMs: LIMITS_READ_MS, freshForMs: () => freshForMs });
+
+  const refreshOne = createRefreshOne({
+    usage,
+    defaultDir,
+    account: async (id) => accountById(await readRegistry(), id),
+    siblings: sameLogin,
+  });
 
   server.handle(listAccounts, async (input, { paseo }) => {
     const [overview, override] = await Promise.all([overviewFor(paseo, input.refresh, input.force), overridingVar(paseo)]);
@@ -287,7 +313,29 @@ export default function contribute(server: PluginServerContext) {
     const registry = await readRegistry();
     const now = registry.defaults?.claude === AUTO ? ((await autoPick("claude"))?.id ?? "") : "";
     const accounts = overview.accounts.map((row) => ({ ...row, autoNow: now !== "" && row.accountIds.includes(now) }));
-    return { ...overview, accounts, overridingVar: override };
+    const answer = { ...overview, accounts, overridingVar: override };
+    // Not awaited: the answer does not wait for the disk, and a failed save only logs.
+    if (answer.error === "") void snapshot.save(answer);
+    return answer;
+  });
+
+  server.handle(snapshotRpc, () => snapshot.read());
+
+  server.handle(refreshAccountRpc, (input) => refreshOne(input.account));
+
+  // From the numbers the screen last showed: the forecast asks the usage endpoint nothing itself.
+  server.handle(forecastRpc, async (input) => {
+    const [saved, registry] = await Promise.all([snapshot.read(), readRegistry()]);
+    const rows = saved.overview?.accounts ?? [];
+    const readings = new Map(
+      await Promise.all(
+        rows.map(async (row) => {
+          const homes = row.accountIds.map((id) => accountById(registry, id)?.home ?? "").filter((home) => home !== "");
+          return [row.key, await history.samplesOf(homes)] as const;
+        }),
+      ),
+    );
+    return computeForecast({ ...input, rows, samples: (row) => readings.get(row.key) ?? [], now: Date.now() });
   });
 
   server.handle(fetchUsage, async (input, { paseo }) => {
@@ -594,7 +642,7 @@ export default function contribute(server: PluginServerContext) {
     await update((registry) => forgetWorkspace(registry, workspace.id));
   });
 
-  return () => {};
+  return () => stopFollowingSettings();
 }
 
 /** Where a "Claude account" attachment links to: the subscription's own usage page. */
@@ -607,3 +655,5 @@ const AUTO_READ_MS = 3_000;
  *  allowance, before answering with what it has. A plugin call is abandoned at 30 s. */
 const IDENTITY_READ_MS = 4_000;
 const LIMITS_READ_MS = 9_000;
+
+const MINUTE_MS = 60_000;

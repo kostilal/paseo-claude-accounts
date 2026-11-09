@@ -17,6 +17,13 @@ export const preferences = defineSettings({
     /** Whether Auto's first pick in a workspace holds for the workspace's later chats. Off:
      *  every new chat is picked on its own. */
     oneAccountPerWorkspace: z.boolean().default(false),
+    /** How long a usage reading stands before the next poll measures it again, in minutes. */
+    refreshMinutes: z.number().int().min(1).max(1440).default(10),
+    /** The forecast on the Accounts screen: logins left out of it, by their key, so a new
+     *  account counts until it is unticked. */
+    forecastUnchecked: z.array(z.string()).default([]),
+    /** Sizes set by hand in the forecast, by login key, in multiples of a Pro plan. */
+    forecastCapacity: z.record(z.string(), z.number().positive()).default({}),
   }),
 });
 
@@ -27,4 +34,7 @@ export const defaultPreferences: Preferences = {
   showPill: true,
   autoPolicy: "burn-first",
   oneAccountPerWorkspace: false,
+  refreshMinutes: 10,
+  forecastUnchecked: [],
+  forecastCapacity: {},
 };

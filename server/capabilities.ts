@@ -214,7 +214,7 @@ export const OPERATIONS: AccountsOperation[] = [
     fixed: { refresh: false, force: false },
     title: "Claude accounts and their usage",
     description:
-      "One row per login on this Mac. name: the account's label; email, orgName, subscriptionType: whose login and which plan; isDefault: new chats open on it; usage: ok, expired, unauthorised, none, error or unsupported, with fiveHour (null with ok: none reported) and sevenDay: percent used, reset time. switchTo is the account to switch to, empty when nobody is logged in to it. Usage may be ten minutes old. error claude-not-found: no claude command. overridingVar: a variable that makes switching useless. To know which account a CHAT uses, read chat_account: isDefault only says where new chats open.",
+      "One row per login on this Mac. name: the account's label; email, orgName, subscriptionType: whose login and which plan; isDefault: new chats open on it; usage: ok, expired, unauthorised, none, error or unsupported, with fiveHour (null with ok: none reported) and sevenDay: percent used, reset time. switchTo is the account to switch to, empty when nobody is logged in to it. Usage may be as old as the auto-refresh interval (default ten minutes). error claude-not-found: no claude command. overridingVar: a variable that makes switching useless. A CHAT's account: read chat_account, not isDefault.",
     input: none,
     fields: OVERVIEW_FIELDS,
   },
@@ -248,7 +248,7 @@ export const OPERATIONS: AccountsOperation[] = [
     fixed: { force: true },
     title: "Which account a chat runs on, limits measured now",
     description:
-      "The same as chat_account, with the account's usage measured now instead of taken from the cache (up to ten minutes old). Takes a few seconds. A reading under a minute old is kept, and a rate-limited one stays until usageHeldSeconds is over.",
+      "The same as chat_account, with the account's usage measured now instead of taken from the cache (up to the auto-refresh interval old, ten minutes by default). Takes a few seconds. A reading under a minute old is kept, and a rate-limited one stays until usageHeldSeconds is over.",
     input: z.object({ agentId }),
     fields: CHAT_ACCOUNT_FIELDS,
     outcome: { error: "error" },

@@ -190,6 +190,9 @@ function toView(dir: string, identity: Identity, provider: ProviderId): AccountV
     sevenDay: null,
     usageErrorCode: "" as const,
     usageError: "",
+    usageAt: null,
+    heldUntil: null,
+    rateLimitTier: "",
   };
 }
 

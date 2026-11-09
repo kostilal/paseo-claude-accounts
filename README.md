@@ -10,7 +10,16 @@ composer: the session restarts on that account and the conversation carries on.
   the wait until the account can be used again. An account with no 5-hour window (Ultra) shows its
   week. Press it to see every account's allowance and switch the chat.
 - **Accounts screen.** Every Claude login on the machine, grouped by subscription, with usage bars,
-  login buttons and "Add account".
+  login buttons and "Add account". It opens at once on the last data it was given, saved by the
+  daemon, and updates in place while it measures; **Reload** re-measures every account.
+- **Refresh in the popover.** In the pill's popover a small round button in the corner of an account
+  measures that one, and beside it a small note says how long ago the account was last measured. A
+  failure or the usage service's wait shows in the row. One above the list measures them all.
+- **Forecast.** On the Accounts screen, tick the accounts to plan over: a chart of their combined
+  reserve over time, every reset at its exact moment and the idle time marked, and hints both ways:
+  when and by how much to slow down if an idle spell is coming, and which account to use first when
+  its week would otherwise be lost at the reset. Reserve is a share of the ticked accounts' combined
+  weekly capacity, never tokens: the provider reports percentages and reset times only.
 - **Per chat.** A switch moves one chat. Other chats, even in the same project, stay where they are.
 - **All chats at once.** "Move all chats here" on an account, pressed twice, moves every chat in
   every workspace onto it and makes it the default: chats opened later start on it too. Idle chats restart on it now, closed ones when they next open; a chat in the middle of
@@ -22,6 +31,8 @@ composer: the session restarts on that account and the conversation carries on.
   login: Paseo shows what to choose instead of an auth error.
 - **Default in the header.** The **Users** button in a workspace's header picks the account
   every new chat opens on: **Auto**, or one account. The pill above a chat switches that chat.
+- **On an account's card.** **New chats here** on the Accounts screen makes that account the
+  default every new chat opens on.
 - **One account per task** (Settings, off by default): Auto's first pick in a workspace holds for
   all its new chats, until the default changes. Off, every new chat is picked on its own.
 - **On the new-workspace screen**, where there is no workspace header yet: **+** in the composer →
@@ -131,21 +142,49 @@ own Claude Code credentials from the Keychain. Claude Code only refreshes those 
 it runs in that directory, so for a directory nobody uses they expire within hours; when that
 happens the plugin runs `claude -p /usage` there (a local command: no model call, no hooks, no
 saved session), which makes Claude Code refresh its own token, at most every 15 minutes per
-directory. The screen and the pill try to read every logged-in account in the background, at
-most every ten minutes. If macOS has not yet allowed Keychain access, a background read gives up
+directory. The screen and the pill try to read every logged-in account in the background, as
+often as the **Auto-refresh** setting says (every ten minutes by default). If macOS has not yet allowed Keychain access, a background read gives up
 after three seconds and the row shows **Show usage** instead; a dialog may flash briefly. Press
 **Show usage** once and choose "Always Allow" so later reads go through without asking.
 The endpoint rate-limits aggressively; on a 429 the last reading is kept until the wait is over.
+
+**The forecast** works from what that endpoint reports, percentages and reset times for the 5-hour
+window and the week, and from the plugin's own record of them, kept for eight days. No request is
+made for it: every reading the screen and the pill take anyway is written down, which also means
+history only grows while Paseo is open.
+
+- *The pace* is the burn over the last day, idle hours included. With less than a day of readings
+  it is blended with the average since the week began; with none it is that average alone.
+- *Capacity.* There are no absolute units, so percentages of different accounts are weighed, never
+  added as they stand. Accounts on one plan weigh the same. Otherwise a plan's multiple of Pro is
+  used (Anthropic publishes those for the 5-hour window only, so for the week it is an assumption,
+  and the screen says so) or a capacity set by hand. An account with neither stays out of the sum
+  until it is given one.
+- *The 5-hour window* is converted to the week by what the account's own readings show it costs.
+  Until enough of them have moved together an assumed figure is used, shown as one, and tightened by
+  what the current numbers rule out.
+- *The run forward* goes from reset to reset at that pace, each at its exact time. Work goes to the
+  account whose week resets soonest, and an account is out of the running while either of its
+  windows is spent. A new 5-hour window starts with the next request after a reset.
+- *What can still be spent* before a reset is what is left of the current 5-hour window and one
+  whole window from each reset after it, up to what is left of the week. Only the windows limit it,
+  not how fast anyone works.
+- *Accuracy* is a level and a ± band around the pace, measured against how far each past day's pace
+  was from the next day's once there are two such pairs, and a rule of thumb from the length of the
+  history before that. Separate weekly limits per model are not counted. Everything assumed is
+  listed under the chart.
 
 ## Files and secrets
 
 | What | Where |
 |---|---|
 | Accounts, per-chat choices, hidden directories | `~/.paseo-claude-accounts/accounts.json` |
+| The last overview the Accounts screen was given, with its emails (mode 0600) | `~/.paseo-claude-accounts/overview-snapshot.json` |
+| The last eight days of usage readings, for the forecast: percentages and reset times (mode 0600) | `~/.paseo-claude-accounts/usage-history.json` |
 | Each account's login | Claude Code's own Keychain item for that config directory; the plugin reads it, never writes it |
 
-The plugin keeps no secret of its own: it stores no tokens, and the state file holds only account
-labels, directories and chat choices. A switched session names the account's directory in its
+The plugin keeps no secret of its own: it stores no tokens, the state file holds only account
+labels, directories and chat choices, and the saved overview holds what the Accounts screen shows. A switched session names the account's directory in its
 process environment; Claude Code reads the login from the Keychain itself.
 
 **Delete** on the Accounts screen only forgets an account: its directory and login stay.
@@ -160,6 +199,8 @@ In Paseo's settings, under **Accounts**:
 - **Default account for new chats**: an account, **Auto**, or not set
 - **How Auto picks**: the week that resets soonest first, or the most room left first
 - **One account per task**: off by default
+- **Auto-refresh**: how often accounts are measured again while Paseo is open, from 5 to 60 minutes;
+  10 by default
 
 ## From ChatGPT
 

@@ -1,4 +1,5 @@
-import type { Strings } from "../shared/i18n.ts";
+import type { RefreshAccountAnswer } from "../shared/accounts.ts";
+import { type Strings, usageErrorText } from "../shared/i18n.ts";
 import type { PillAccount, PillState } from "../shared/switch.ts";
 
 /** Same shape as `Bar` in shared/accounts.ts, redeclared so the pill does not import Zod. */
@@ -146,4 +147,54 @@ export function hasSpare(state: PillState): boolean {
 
 export function currentOf(state: PillState): PillAccount | null {
   return state.accounts.find((account) => account.current) ?? null;
+}
+
+/** When a row was last measured, short enough for its corner: "just now", "26 s ago", "3 min ago". */
+export function updatedAgoText(at: number, now: number, strings: Strings): string {
+  const ms = Math.max(0, now - at);
+  if (ms < 10_000) return strings.updatedJustNow;
+  // Rounded down: a wait rounds up, an age must not read older than it is.
+  const seconds = Math.floor(ms / 1000);
+  const ago = seconds < 60 ? `${seconds} ${strings.unitSec}` : seconds < 3600 ? `${Math.floor(seconds / 60)} ${strings.unitMin}` : formatWait(ms, strings);
+  return strings.updatedAgo.replace("{ago}", ago);
+}
+
+/** What an account's row says after its refresh, when its corner's time does not say it already. */
+export function refreshNotice(
+  answer: RefreshAccountAnswer,
+  now: number,
+  strings: Strings,
+): { text: string; tone: "info" | "warn" | "bad" } | null {
+  if (answer.outcome === "failed") {
+    if (answer.code === "unknown-account") return { text: strings.usageUnknownAccount, tone: "bad" };
+    if (answer.usage === "expired") return { text: strings.usageExpired, tone: "bad" };
+    return { text: answer.error === "" ? strings.usageReadFailed : `${strings.usageReadFailed} ${usageErrorText(answer.error, strings)}`, tone: "bad" };
+  }
+  if (answer.fiveHour === null && answer.sevenDay === null) return { text: strings.noUsageAllowance, tone: "info" };
+  if (answer.outcome === "updated" || answer.outcome === "recent") return null;
+  const wait = formatWait(Math.max(0, (answer.heldUntil ?? now) - now), strings);
+  return { text: strings.refreshHeld.replace("{wait}", wait), tone: "warn" };
+}
+
+/** A moment in the forecast, in the reader's language: the weekday and the time. */
+export function dayTimeText(at: number, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, { weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).format(at);
+  } catch {
+    // A runtime without Intl data.
+    return new Date(at).toLocaleString();
+  }
+}
+
+/** When saved data was saved, short and in the reader's language: the time alone today, with
+ *  the date on another day. */
+export function savedAtText(at: number, now: number, locale: string): string {
+  const today = new Date(at).toDateString() === new Date(now).toDateString();
+  const options: Intl.DateTimeFormatOptions = today ? { timeStyle: "short" } : { dateStyle: "short", timeStyle: "short" };
+  try {
+    return new Intl.DateTimeFormat(locale, options).format(at);
+  } catch {
+    // A runtime without Intl data.
+    return new Date(at).toLocaleString();
+  }
 }

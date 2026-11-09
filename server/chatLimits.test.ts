@@ -141,3 +141,17 @@ test("a look at other directories that takes too long gives the account's own an
   assert.equal(view.usage, "expired");
   assert.equal(view.usageAgeSeconds, 7);
 });
+
+test("the configured interval decides whether the numbers count as old", async () => {
+  const stages = { [mine.home]: { cached: ok(30), info: info(200) } };
+  const { limits } = setup(stages);
+  assert.equal((await limits(mine, false)).usageStale, false);
+  const short = createChatLimits({
+    usage: { cached: () => ok(30), stale: () => false, measure: async () => ok(30), info: () => info(200) },
+    defaultDir: () => "/h/.claude",
+    siblings: async () => [],
+    now: () => NOW,
+    freshForMs: () => 3 * 60_000,
+  });
+  assert.equal((await short(mine, false)).usageStale, true);
+});

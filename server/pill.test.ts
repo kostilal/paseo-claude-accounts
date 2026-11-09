@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loginLabel } from "../shared/identity.ts";
 import { claudeNotFound } from "./discover.ts";
-import type { Registry } from "../shared/registry.ts";
+import { type Account, type Registry, emptyRegistry } from "../shared/registry.ts";
 import { type PillDeps, pillStateFor } from "./pill.ts";
 
 const work = { id: "work", label: "Work", provider: "claude" as const, home: "/w/acme/.claude-data" };
@@ -383,10 +383,24 @@ test("a project whose cached login was rewritten keeps its own row", async () =>
     input,
     deps({
       identify: async () => rewritten,
-      profile: async (dir) => (dir === work.home ? { email: "work@example.com", orgName: "", orgId: "org-work" } : null),
+      profile: async (dir) => (dir === work.home ? { email: "work@example.com", orgName: "", orgId: "org-work", rateLimitTier: "" } : null),
     }),
   );
   assert.equal(state.accounts.length, 2);
   assert.equal(state.accounts.find((row) => row.accountIds.includes("work"))?.email, "work@example.com");
   assert.equal(state.accounts.find((row) => row.accountIds.includes("home"))?.email, "home@example.com");
+});
+
+test("a row carries when its reading was measured, from the directory that answered", async () => {
+  const site: Account = { id: "site", label: "Site", provider: "claude", home: "/h/.claude-site" };
+  const state = await pillStateFor(
+    { agentId: "a", cwd: "/w", manual: false },
+    deps({
+      readRegistry: async () => ({ ...emptyRegistry(), accounts: [site] }),
+      identify: async () => ({ loggedIn: true, email: "s@x", orgName: "", subscriptionType: "max" }),
+      usageFor: async () => ({ state: "ok", fiveHour: null, sevenDay: { utilization: 5, resetsAt: "2026-11-10T00:00:00Z" }, error: "" }),
+      info: (home) => (home === site.home ? { measuredAt: 1234, heldUntil: null } : null),
+    }),
+  );
+  assert.equal(state.accounts[0]!.usageAt, 1234);
 });

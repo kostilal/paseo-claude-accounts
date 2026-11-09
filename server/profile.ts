@@ -17,6 +17,8 @@ export interface ProfileIdentity {
   email: string;
   orgName: string;
   orgId: string;
+  /** The organisation's `rate_limit_tier`, such as `default_claude_max_20x`; "" when absent. */
+  rateLimitTier: string;
 }
 
 export interface ProfileDeps {
@@ -38,7 +40,7 @@ const liveDeps: ProfileDeps = {
  *  is one. Logged-in state and plan stay: they come from the credential, which is reliable. */
 export function withProfile(identity: Identity, profile: ProfileIdentity | null): Identity {
   if (profile === null) return identity;
-  return { ...identity, email: profile.email, orgName: profile.orgName, orgId: profile.orgId };
+  return { ...identity, email: profile.email, orgName: profile.orgName, orgId: profile.orgId, rateLimitTier: profile.rateLimitTier };
 }
 
 /** A registered Claude account's identity with its email and organisation taken from its own
@@ -65,6 +67,7 @@ export function parseProfile(raw: string): ProfileIdentity | null {
     email,
     orgName: typeof organization.name === "string" ? organization.name : "",
     orgId: typeof organization.uuid === "string" ? organization.uuid : "",
+    rateLimitTier: typeof organization.rate_limit_tier === "string" ? organization.rate_limit_tier : "",
   };
 }
 

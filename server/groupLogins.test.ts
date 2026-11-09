@@ -263,3 +263,18 @@ test("chooseUsageHome: a group with nothing registered at all reads nothing", ()
   const home = chooseUsageHome({ accountIds: [], switchTo: "" }, () => null, () => true);
   assert.equal(home, null);
 });
+
+test("a row carries the rate limit tier of the member it is titled by", () => {
+  const groups = groupByLogin(
+    [
+      { accountId: "beta", home: "/b", identity: { loggedIn: true, email: "a@x", orgName: "O", subscriptionType: "max", rateLimitTier: "tier-b" } },
+      { accountId: "apex", home: "/a", identity: { loggedIn: true, email: "a@x", orgName: "O", subscriptionType: "max", rateLimitTier: "tier-a" } },
+    ],
+    noContext,
+  );
+  assert.equal(groups[0]?.rateLimitTier, "tier-a", "the lowest id names the row, so its tier is the row's");
+  assert.equal(
+    groupByLogin([{ accountId: "a", home: "/a", identity: { loggedIn: true, email: "a@x", orgName: "", subscriptionType: "" } }], noContext)[0]?.rateLimitTier,
+    "",
+  );
+});

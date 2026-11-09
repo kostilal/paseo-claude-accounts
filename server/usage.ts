@@ -1,3 +1,4 @@
+import { bounded } from "./bounded.ts";
 import { timeoutSignal } from "./net.ts";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -5,6 +6,7 @@ import type { UsageState } from "../shared/accounts.ts";
 import { type Bar, parseUsage } from "../shared/parse.ts";
 import { tmpdir } from "node:os";
 import { claudeEnv, findClaude } from "./claude.ts";
+import { USAGE_RATE_LIMITED } from "../shared/i18n.ts";
 import { serviceName } from "../shared/service.ts";
 import { type Credential, KeychainTimeout, NO_TOKEN, readCredential } from "./keychain.ts";
 import { FRESH_FOR_MS, type UsageInfo } from "./limits.ts";
@@ -41,6 +43,9 @@ export interface UsageDeps {
   /** Has Claude Code refresh the access token stored for `dir`. */
   refresh?(dir: string): Promise<void>;
   now?(): number;
+  /** Told about each `ok` reading just taken from the endpoint: not one kept through a 429, not
+   *  an expired or failed one. */
+  onReading?(dir: string, result: UsageResult, measuredAt: number): void;
 }
 
 /** On a 429 the endpoint sends a `retry-after` of about 25 minutes; the last good reading
@@ -62,7 +67,7 @@ async function claudeVersion(): Promise<string> {
   }
 }
 
-const liveDeps: UsageDeps = {
+export const liveDeps: UsageDeps = {
   readCredential,
   request: (token, userAgent) =>
     fetch(ENDPOINT, {
@@ -95,6 +100,14 @@ function nothingThereYet(error: unknown): boolean {
   return error instanceof Error && error.message === NO_TOKEN;
 }
 
+/** A failed request in words. `fetch` says only "fetch failed" and keeps the reason in `cause`. */
+function failureText(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = (error as { cause?: { code?: unknown; message?: unknown } }).cause;
+  const detail = typeof cause?.code === "string" ? cause.code : typeof cause?.message === "string" ? cause.message : "";
+  return detail === "" ? error.message : `${error.message} (${detail})`;
+}
+
 function blank(state: UsageState, error = ""): UsageResult {
   return { state, fiveHour: null, sevenDay: null, error };
 }
@@ -103,7 +116,7 @@ interface Entry extends UsageInfo {
   /** When the entry was written; its freshness window runs from here. */
   at: number;
   result: UsageResult;
-  /** How long this reading stands; FRESH_FOR_MS when absent. */
+  /** How long this reading stands; the configured interval when absent. */
   freshFor?: number;
   /** What Reload may do inside the window. `retake`: expired or empty, which a login changes.
    *  `floor`: cost a request, so not again within FORCE_FLOOR_MS. `keep`: a Keychain dialog
@@ -114,10 +127,13 @@ interface Entry extends UsageInfo {
 /** Usage readings per config directory, with a cache. Callers check `authorised()` before
  *  reading in the background; a background read that hits a Keychain dialog is killed and
  *  the directory drops back to `unauthorised` rather than blocking the daemon. */
-export function createUsage(deps: UsageDeps = liveDeps) {
+export function createUsage(deps: UsageDeps = liveDeps, freshForMs: () => number = () => FRESH_FOR_MS) {
   const authorisedDirs = new Set<string>();
   const cache = new Map<string, Entry>();
   const refreshedAt = new Map<string, number>();
+  /** The reading under way per directory. A second caller joins it, so overlapping refreshes
+   *  cost one request and a slow older reading cannot land on top of a newer one. */
+  const inFlight = new Map<string, { manual: boolean; reading: Promise<UsageResult> }>();
 
   /** A fresh credential after a refresh, or null when none is allowed yet or it did not help. */
   async function refreshed(dir: string, service: string, timeoutMs: number | null): Promise<Credential | null> {
@@ -135,7 +151,31 @@ export function createUsage(deps: UsageDeps = liveDeps) {
 
   /** `manual`: a person pressed the button and waits for the Keychain dialog. Otherwise the
    *  read gets three seconds, and a timeout means a dialog is up. */
-  async function measure(dir: string, defaultDir: string, manual: boolean): Promise<UsageResult> {
+  function measure(dir: string, defaultDir: string, manual: boolean): Promise<UsageResult> {
+    const running = inFlight.get(dir);
+    if (running === undefined) {
+      const reading = take(dir, defaultDir, manual).finally(() => inFlight.delete(dir));
+      inFlight.set(dir, { manual, reading });
+      return reading;
+    }
+    // A person may leave a Keychain dialog open for minutes; a poll must not wait that out.
+    if (running.manual && !manual) return bounded(running.reading, BACKGROUND_TIMEOUT_MS, cache.get(dir)?.result ?? blank("unauthorised"));
+    if (running.manual || !manual) return running.reading;
+    // A background reading gave up on a Keychain dialog after three seconds; the person who
+    // joined it is there to answer one, so theirs is taken afterwards.
+    return running.reading.then((result) => (result.state === "unauthorised" ? measure(dir, defaultDir, true) : result));
+  }
+
+  /** Tells the listener; nothing it does can reach a reading, a rejected promise included. */
+  function announce(dir: string, result: UsageResult, measuredAt: number): void {
+    try {
+      void Promise.resolve(deps.onReading?.(dir, result, measuredAt)).catch(() => {});
+    } catch {
+      // The reading stands whatever the listener makes of it.
+    }
+  }
+
+  async function take(dir: string, defaultDir: string, manual: boolean): Promise<UsageResult> {
     const now = deps.now ?? Date.now;
     const timeoutMs = manual ? null : BACKGROUND_TIMEOUT_MS;
     const service = await serviceName(dir, defaultDir);
@@ -185,8 +225,9 @@ export function createUsage(deps: UsageDeps = liveDeps) {
         const earlier = cache.get(dir);
         const previous = earlier?.result ?? null;
         const wait = retryAfterMs(response);
-        const keeping = previous !== null && previous.state === "ok";
-        const kept = keeping ? previous : blank("error", "rate limited by the usage endpoint");
+        const keeping = previous !== null && (previous.fiveHour !== null || previous.sevenDay !== null);
+        // The numbers are good and only held: an older failure is not what is wrong now.
+        const kept: UsageResult = keeping ? { ...previous, state: "ok", error: "" } : blank("error", USAGE_RATE_LIMITED);
         // The numbers kept are the old ones and keep their age; only the hold is new.
         cache.set(dir, {
           at: now(),
@@ -205,9 +246,20 @@ export function createUsage(deps: UsageDeps = liveDeps) {
             : { state: "ok", fiveHour: meter.fiveHour, sevenDay: meter.sevenDay, error: "" };
       }
     } catch (error) {
-      result = blank("error", error instanceof Error ? error.message : String(error));
+      const message = failureText(error);
+      // A failed request says nothing about the allowance: the last numbers stay on the row beside
+      // the error, and keep their own age.
+      const earlier = cache.get(dir);
+      if (earlier !== undefined && (earlier.result.fiveHour !== null || earlier.result.sevenDay !== null)) {
+        const kept: UsageResult = { ...earlier.result, state: "error", error: message };
+        cache.set(dir, { at: now(), measuredAt: earlier.measuredAt, heldUntil: null, result: kept, onForce });
+        return kept;
+      }
+      result = blank("error", message);
     }
-    cache.set(dir, { at: now(), measuredAt: now(), heldUntil: null, result, onForce });
+    const measuredAt = now();
+    cache.set(dir, { at: measuredAt, measuredAt, heldUntil: null, result, onForce });
+    if (result.state === "ok") announce(dir, result, measuredAt);
     return result;
   }
 
@@ -227,7 +279,7 @@ export function createUsage(deps: UsageDeps = liveDeps) {
       const entry = cache.get(dir);
       if (entry === undefined) return true;
       const age = (deps.now ?? Date.now)() - entry.at;
-      if (age > (entry.freshFor ?? FRESH_FOR_MS)) return true;
+      if (age > (entry.freshFor ?? freshForMs())) return true;
       if (!force) return false;
       return entry.onForce === "retake" || (entry.onForce === "floor" && age > FORCE_FLOOR_MS);
     },

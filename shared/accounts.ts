@@ -48,6 +48,13 @@ export const accountView = z.object({
    *  `usageError` carries raw text instead. */
   usageErrorCode: z.enum(["", "unknown-account"]).default(""),
   usageError: z.string().default(""),
+  /** When the shown numbers were measured, ms since the epoch; null when nothing was. */
+  usageAt: z.number().nullable().default(null),
+  /** While the usage endpoint rate-limits, when it may be asked again; null otherwise. */
+  heldUntil: z.number().nullable().default(null),
+  /** The organisation's `rate_limit_tier` from the login's profile, such as
+   *  `default_claude_max_20x`; "" when it is not known. */
+  rateLimitTier: z.string().default(""),
 });
 
 /** A directory the user removed from the list, shown under "Show hidden" so it can be
@@ -92,6 +99,34 @@ export const fetchUsage = defineRpc({
   input: z.object({ account: z.string() }),
   output: accountView,
 });
+
+/** The last overview the Accounts screen was given, kept by the daemon so the screen can open
+ *  on it at once. `overview` is null when there is none yet. */
+export const snapshotRpc = defineRpc({
+  name: "accounts.snapshot",
+  input: z.object({}),
+  output: z.object({ overview: overview.nullable(), savedAt: z.number().nullable() }),
+});
+
+/** Measures one account now, for the Refresh button in the pill's popover. Respects the
+ *  floor between readings and a 429's wait, so a repeated press cannot reach the rate-limited
+ *  endpoint: `recent` and `held` answer with the numbers there are. */
+export const refreshAccountRpc = defineRpc({
+  name: "accounts.refresh-one",
+  input: z.object({ account: z.string() }),
+  output: z.object({
+    outcome: z.enum(["updated", "recent", "held", "failed"]),
+    usage: usageState,
+    fiveHour: bar.nullable(),
+    sevenDay: bar.nullable(),
+    measuredAt: z.number().nullable(),
+    heldUntil: z.number().nullable(),
+    error: z.string().default(""),
+    code: z.enum(["", "unknown-account"]).default(""),
+  }),
+});
+
+export type RefreshAccountAnswer = z.output<typeof refreshAccountRpc.output>;
 
 export const loginAccount = defineRpc({
   name: "accounts.login",

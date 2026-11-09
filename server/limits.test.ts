@@ -108,3 +108,9 @@ test("durations read the way a person says them", () => {
   assert.equal(humanDuration(90_000), "1 d 1 h");
   assert.equal(humanDuration(234_000), "2 d 17 h");
 });
+
+test("a configured interval moves the point where numbers count as old", () => {
+  const measured = { measuredAt: NOW - 200_000, heldUntil: null };
+  assert.equal(viewLimits(reading, measured, NOW).usageStale, false);
+  assert.equal(viewLimits(reading, measured, NOW, 3 * 60_000).usageStale, true);
+});

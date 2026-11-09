@@ -103,6 +103,8 @@ export const pillAccount = z.object({
   usage: usageState.default("unauthorised"),
   fiveHour: bar.nullable().default(null),
   sevenDay: bar.nullable().default(null),
+  /** When the shown numbers were measured, ms since the epoch; null when nothing was. */
+  usageAt: z.number().nullable().default(null),
 });
 
 export const pillState = z.object({

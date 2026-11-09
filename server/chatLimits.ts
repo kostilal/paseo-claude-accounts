@@ -20,6 +20,8 @@ export interface ChatLimitsDeps {
    *  given with what there is. A plugin call is abandoned at 30 s. */
   readMs?: number;
   now?(): number;
+  /** How long a reading stands, from the auto-refresh setting; ten minutes when absent. */
+  freshForMs?(): number;
 }
 
 /** How many other directories are tried when the account's own cannot answer. */
@@ -37,6 +39,8 @@ const usable = (reading: UsageResult | null) => reading !== null && (reading.sta
  */
 export function createChatLimits(deps: ChatLimitsDeps) {
   const readMs = deps.readMs ?? 9_000;
+  const view = (reading: { result: UsageResult | null; info: UsageInfo | null }) =>
+    viewLimits(reading.result, reading.info, (deps.now ?? Date.now)(), deps.freshForMs?.());
 
   async function read(home: string, force: boolean) {
     const cached = deps.usage.cached(home);
@@ -49,7 +53,7 @@ export function createChatLimits(deps: ChatLimitsDeps) {
 
   return async function limitsOf(account: Account, force: boolean): Promise<LimitsView> {
     const own = await read(account.home, force);
-    if (usable(own.result)) return viewLimits(own.result, own.info, (deps.now ?? Date.now)());
+    if (usable(own.result)) return view(own);
     const best = await bounded(
       (async () => {
         for (const sibling of (await deps.siblings(account)).slice(0, SIBLINGS_TRIED)) {
@@ -61,6 +65,6 @@ export function createChatLimits(deps: ChatLimitsDeps) {
       readMs,
       own,
     );
-    return viewLimits(best.result, best.info, (deps.now ?? Date.now)());
+    return view(best);
   };
 }

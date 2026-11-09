@@ -9,8 +9,9 @@ interface Storage {
 /**
  * The language set in Paseo's own settings, or null when it cannot be read.
  *
- * The SDK does not expose the app's language, so on web/desktop this reads Paseo's settings
- * record from localStorage. It is matched by shape (`language` + `theme`), not by key, so a
+ * What the language setting itself says, which tells "system" from a language chosen, as the
+ * host's resolved language cannot. On web/desktop this reads Paseo's settings record from
+ * localStorage. It is matched by shape (`language` + `theme`), not by key, so a
  * renamed key degrades to the device language. Native clients always return null.
  */
 export function appLanguage(): string | null {

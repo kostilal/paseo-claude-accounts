@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { userInfo } from "node:os";
 import { promisify } from "node:util";
+import { USAGE_BAD_KEYCHAIN, USAGE_NO_TOKEN } from "../shared/i18n.ts";
 import { record } from "../shared/parse.ts";
 
 const run = promisify(execFile);
@@ -10,7 +11,7 @@ const run = promisify(execFile);
 export class KeychainTimeout extends Error {}
 
 /** The message for an item that holds no claude.ai token. */
-export const NO_TOKEN = "this config directory has no claude.ai token";
+export const NO_TOKEN = USAGE_NO_TOKEN;
 
 /** Whether `execFile` killed the child because of its timeout. */
 export function killedByTimeout(error: unknown): boolean {
@@ -52,7 +53,7 @@ export async function readCredential(service: string, timeoutMs: number | null):
   try {
     parsed = JSON.parse(stdout);
   } catch {
-    throw new Error("the Keychain item for this config directory is not JSON");
+    throw new Error(USAGE_BAD_KEYCHAIN);
   }
   const blob = record(parsed);
   const oauth = record(blob.claudeAiOauth);

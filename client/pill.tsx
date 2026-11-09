@@ -6,21 +6,20 @@ import {
   useAgent,
   useRpc,
 } from "@getpaseo/plugin/client";
-import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { fetchUsage } from "../shared/accounts.ts";
+import { fetchUsage, refreshAccountRpc } from "../shared/accounts.ts";
 import { loginLabel } from "../shared/identity.ts";
 import { type Strings, t } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { nearlyFull } from "../shared/auto.ts";
 import { type PillAccount, type SwitchCode, claudeProvidersRpc, pillStateRpc, switchAccountRpc } from "../shared/switch.ts";
-import { currentOf, exhaustedResetIn, hasSpare, pillFigure, pillPercent, tightestOf, usageLine, weekLine } from "./format.ts";
+import { currentOf, exhaustedResetIn, hasSpare, pillFigure, pillPercent, refreshNotice, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
 import { createPillRegistry, trackClaudeAgents } from "./pill-registry.ts";
 import { AccountRing } from "./ring.tsx";
 import { typeScale } from "./typography.ts";
-import { Banner, Button, EmptyState, Skeleton, meterTone } from "./ui.tsx";
+import { Banner, Button, EmptyState, RefreshDot, Skeleton, meterTone } from "./ui.tsx";
 
 /** A row is named by its login, not by the config directory holding it. */
 export function loginTitle(account: PillAccount, strings: Strings): string {
@@ -170,6 +169,7 @@ export function AccountPopover(props: PluginButtonContentProps) {
   const strings = useStrings();
   const askPill = useRpc(pillStateRpc);
   const askUsage = useRpc(fetchUsage);
+  const askRefresh = useRpc(refreshAccountRpc);
   const doSwitch = useRpc(switchAccountRpc);
   const queries = useQueryClient();
   const cwd = useAgent(agentId, (agent) => agent.cwd);
@@ -177,7 +177,7 @@ export function AccountPopover(props: PluginButtonContentProps) {
   const busy = status === "running" || status === "initializing";
 
   const key = pillKey(agentId);
-  const { data, isError, error, refetch } = useQuery({
+  const { data, isError, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: key,
     queryFn: () => askPill({ agentId, cwd: cwd ?? "", workspaceId, manual: false }),
     enabled: cwd !== null,
@@ -190,6 +190,31 @@ export function AccountPopover(props: PluginButtonContentProps) {
     mutationFn: (account: string) => askUsage({ account }),
     onSuccess: () => queries.invalidateQueries({ queryKey: key }),
   });
+
+  const showFreshNumbers = () => {
+    void queries.invalidateQueries({ queryKey: ["accounts", "pill"] });
+    void queries.invalidateQueries({ queryKey: ["accounts", "overview"] });
+  };
+
+  // Each round button answers for its own row, and several accounts may refresh at once.
+  const [refreshing, setRefreshing] = useState<readonly string[]>([]);
+  const [refreshed, setRefreshed] = useState<Readonly<Record<string, { text: string; tone: NoticeTone }>>>({});
+
+  function refreshRow(account: PillAccount) {
+    setRefreshing((rows) => [...rows, account.key]);
+    setRefreshed(({ [account.key]: _, ...others }) => others);
+    void askRefresh({ account: account.switchTo })
+      .then(
+        (answer) => refreshNotice(answer, Date.now(), strings),
+        (reason: unknown) => ({ text: `${strings.usageReadFailed} ${rawErrorText(reason)}`, tone: "bad" as const }),
+      )
+      .then((result) => setRefreshed((others) => (result === null ? others : { ...others, [account.key]: result })))
+      .finally(() => {
+        setRefreshing((rows) => rows.filter((row) => row !== account.key));
+        showFreshNumbers();
+      });
+  }
+
 
   // A press while the agent is working arms the row; a second press switches. Rows stay
   // pressable through a turn because noticing a limit happens while the agent is working.
@@ -217,7 +242,9 @@ export function AccountPopover(props: PluginButtonContentProps) {
   }
 
   const notice = switchNotice(failedSwitches.get(agentId) ?? null, strings);
-  const now = Date.now();
+  // Reading `dataUpdatedAt` draws the rows again on every poll, or the times beside them would
+  // stand still while the numbers do not change.
+  const now = Math.max(Date.now(), dataUpdatedAt);
   const loadFailedBanner = (
     <Banner
       theme={theme}
@@ -232,10 +259,19 @@ export function AccountPopover(props: PluginButtonContentProps) {
   const warning = nearlyFullText(rows.find((row) => row.current) ?? null, strings);
   // The current account's usage could not be read: offer a manual reveal under the list.
   const unread = rows.find((row) => row.current && (row.usage === "unauthorised" || row.usage === "error")) ?? null;
+  // The button above the list presses every row's own, so each row says what came back. Not the
+  // rows that have not been allowed the Keychain: each would bring up a dialog of its own.
+  const refreshable = ordered.filter((row) => row.usage !== "unsupported" && row.usage !== "unauthorised" && row.switchTo !== "");
+  const noticeColour = { info: theme.colors.foregroundMuted, warn: theme.colors.statusWarning, bad: theme.colors.statusDanger };
 
   return (
     <View style={{ padding: layout.compact ? 10 : 12, gap: 8, minWidth: layout.compact ? 280 : 340, maxWidth: 420 }}>
-      <Text style={{ ...typeScale.body, fontWeight: "600", color: theme.colors.foreground }}>{strings.pillTitle}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <Text style={{ ...typeScale.body, fontWeight: "600", color: theme.colors.foreground }}>{strings.pillTitle}</Text>
+        {refreshable.length > 0 && (
+          <RefreshDot theme={theme} label={strings.refreshAllAccounts} busy={refreshing.length > 0} onPress={() => refreshable.forEach(refreshRow)} />
+        )}
+      </View>
       <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }}>{strings.pillHint}</Text>
       {cwd === null ? (
         <Banner theme={theme} tone="info" text={strings.pillAgentUnknown} />
@@ -257,10 +293,12 @@ export function AccountPopover(props: PluginButtonContentProps) {
                 const tightest = tightestOf(account.fiveHour, account.sevenDay);
                 const title = loginTitle(account, strings);
                 const pressable = !account.current;
+                const refreshes = account.usage !== "unsupported" && account.switchTo !== "";
                 const tone =
                   tightest !== null && tightest >= 70 ? theme.colors[meterTone(tightest)] : theme.colors.foregroundMuted;
                 return (
                   <View key={account.key} style={{ gap: 6 }}>
+                    <View>
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={title}
@@ -286,7 +324,8 @@ export function AccountPopover(props: PluginButtonContentProps) {
                     >
                       <AccountRing theme={theme} size={30} provider={account.provider} tightest={tightest} />
                       <View style={{ flex: 1, gap: 2 }}>
-                        <Text style={{ ...typeScale.body, fontWeight: "600", color: theme.colors.foreground }} numberOfLines={1}>
+                        {/* Clear of the corner, which holds the time and the round button. */}
+                        <Text style={{ ...typeScale.body, fontWeight: "600", color: theme.colors.foreground, paddingRight: refreshes ? 96 : 0 }} numberOfLines={1}>
                           {title}
                         </Text>
                         <Text style={{ ...typeScale.meta, color: tone }} numberOfLines={1}>
@@ -302,13 +341,30 @@ export function AccountPopover(props: PluginButtonContentProps) {
                             {strings.usageExpired}
                           </Text>
                         )}
+                        {refreshed[account.key] !== undefined && (
+                          <Text style={{ ...typeScale.meta, color: noticeColour[refreshed[account.key]!.tone] }} numberOfLines={3}>
+                            {refreshed[account.key]!.text}
+                          </Text>
+                        )}
                       </View>
-                      {account.current ? (
-                        <Icon name="Check" size={16} color={theme.colors.accent} />
-                      ) : (
-                        <Icon name="ChevronRight" size={16} color={theme.colors.foregroundMuted} />
-                      )}
                     </Pressable>
+                    {/* Beside the row rather than inside it, so a press here can never switch the chat. */}
+                    {refreshes && (
+                      <View pointerEvents="box-none" style={{ position: "absolute", top: 7, right: 7, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        {account.usageAt !== null && (
+                          <Text numberOfLines={1} style={{ ...typeScale.meta, fontSize: 10, color: theme.colors.foregroundMuted }}>
+                            {updatedAgoText(account.usageAt, now, strings)}
+                          </Text>
+                        )}
+                        <RefreshDot
+                          theme={theme}
+                          label={`${strings.refreshAccount}: ${title}`}
+                          busy={refreshing.includes(account.key)}
+                          onPress={() => refreshRow(account)}
+                        />
+                      </View>
+                    )}
+                    </View>
                     {armed === account.switchTo && <Banner theme={theme} tone="warn" text={strings.switchBusy} />}
                   </View>
                 );

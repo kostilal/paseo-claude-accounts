@@ -10,6 +10,11 @@ export const STATE_DIR = join(homedir(), ".paseo-claude-accounts");
 
 export const STATE_FILE = join(STATE_DIR, "accounts.json");
 
+/** The last overview the Accounts screen was given; see server/snapshot.ts. */
+export const OVERVIEW_SNAPSHOT_FILE = join(STATE_DIR, "overview-snapshot.json");
+
+export const USAGE_HISTORY_FILE = join(STATE_DIR, "usage-history.json");
+
 /**
  * What the state file is. `absent` is a fresh install and safe to write over; `unreadable`
  * is somebody's state this version did not understand, and must not be overwritten with

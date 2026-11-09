@@ -1,6 +1,6 @@
 import type { PluginClientContext, PluginSidebarItemProps } from "@getpaseo/plugin/client";
 import { SidebarRow } from "@getpaseo/plugin/client/ui";
-import { detectAppLocale } from "./client/locale.ts";
+import { detectAppLocale, rememberHostLanguage, useStrings } from "./client/locale.ts";
 import { contributeClient } from "./client/pill.tsx";
 import { AccountsSurface } from "./client/screen.tsx";
 import { AccountsSettings } from "./client/settings.tsx";
@@ -9,12 +9,14 @@ import { accountSearchRpc } from "./shared/attach.ts";
 import { t } from "./shared/i18n.ts";
 
 function AccountsSidebarItem({ currentScreen, openScreen }: PluginSidebarItemProps) {
+  const strings = useStrings();
   return (
-    <SidebarRow icon="Users" active={currentScreen?.screenId === "main"} onPress={() => openScreen({ screenId: "main" })} />
+    <SidebarRow icon="Users" label={strings.sidebarTitle} active={currentScreen?.screenId === "main"} onPress={() => openScreen({ screenId: "main" })} />
   );
 }
 
 export default function contribute(client: PluginClientContext) {
+  rememberHostLanguage(client);
   // Titles are fixed at registration, before the plugin's own language preference can be
   // read, so they follow Paseo's language; the surfaces follow the preference.
   const strings = t(detectAppLocale());

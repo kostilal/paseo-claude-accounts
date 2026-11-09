@@ -50,6 +50,9 @@ function account(id: string, over: Partial<AccountView> = {}): AccountView {
     sevenDay: null,
     usageErrorCode: "",
     usageError: "",
+    usageAt: null,
+    heldUntil: null,
+    rateLimitTier: "",
     ...over,
   };
 }
@@ -64,6 +67,7 @@ function usageReader(over: Partial<UsageReader> = {}): UsageReader {
     stale: () => true,
     cached: () => null,
     measure: async () => meter(),
+    info: () => null,
     ...over,
   };
 }
@@ -643,7 +647,7 @@ test("a project whose cached login was rewritten keeps its own row", async () =>
   const view = await createOverview(
     deps({
       discover: async () => rewritten(),
-      profile: async (home) => (home === WORK ? { email: "alice@example.com", orgName: "Acme", orgId: "org-acme" } : null),
+      profile: async (home) => (home === WORK ? { email: "alice@example.com", orgName: "Acme", orgId: "org-acme", rateLimitTier: "" } : null),
     }),
   )(paseo);
   const registered = view.accounts.filter((row) => row.registered);
@@ -665,4 +669,34 @@ test("Reload asks each login again rather than answering from memory", async () 
   await overview(paseo);
   await overview(paseo, false, true);
   assert.deepEqual(refreshes, [false, false, true, true]);
+});
+
+test("a row says when its numbers were measured, from the directory that gave them", async () => {
+  const shared = { email: "a@x", orgName: "Acme" };
+  const rows = createOverview(
+    deps({
+      discover: async () => [account(WORK, shared), account(PERSONAL, shared)],
+      readRegistry: async () => registry(),
+      usage: usageReader({
+        measure: async (dir) => (dir === WORK ? meter({ state: "expired", fiveHour: null }) : meter()),
+        info: (dir) => (dir === WORK ? { measuredAt: 111, heldUntil: null } : { measuredAt: 222, heldUntil: 999 }),
+      }),
+    }),
+  );
+  const view = await rows(paseo);
+  assert.equal(view.accounts.length, 1);
+  assert.equal(view.accounts[0]?.usage, "ok");
+  assert.equal(view.accounts[0]?.usageAt, 222);
+  assert.equal(view.accounts[0]?.heldUntil, 999);
+});
+
+test("a row carries the login's rate limit tier", async () => {
+  const view = await createOverview(
+    deps({
+      discover: async () => [account(WORK, { email: "a@x", orgName: "Acme" })],
+      readRegistry: async () => registry({ accounts: [workAccount] }),
+      profile: async () => ({ email: "a@x", orgName: "Acme", orgId: "o", rateLimitTier: "default_claude_max_20x" }),
+    }),
+  )(paseo);
+  assert.equal(view.accounts[0]?.rateLimitTier, "default_claude_max_20x");
 });

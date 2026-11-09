@@ -237,6 +237,53 @@ export function Button({
   );
 }
 
+/** A small round refresh control for the corner of a row; it spins while its work runs. */
+export function RefreshDot({
+  theme,
+  label,
+  busy,
+  onPress,
+}: {
+  theme: PluginTheme;
+  label: string;
+  busy: boolean;
+  onPress: () => void;
+}) {
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!busy) return;
+    const animation = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }));
+    animation.start();
+    return () => {
+      animation.stop();
+      spin.setValue(0);
+    };
+  }, [busy, spin]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={busy}
+      hitSlop={8}
+      onPress={onPress}
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: RADIUS.pill,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface2,
+      }}
+    >
+      <Animated.View style={{ transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }] }}>
+        <Icon name="RefreshCw" size={12} color={theme.colors.foregroundMuted} />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 /** An info, warning or error message with an optional action, so a failure can say what to do next. */
 export function Banner({
   theme,

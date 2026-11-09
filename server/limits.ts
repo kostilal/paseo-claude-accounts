@@ -4,7 +4,7 @@ import type { Bar } from "../shared/parse.ts";
 import type { UsageResult } from "./usage.ts";
 
 /** How long a usage reading stands before it is measured again, and so how long the numbers
- *  may be called current. */
+ *  may be called current, unless the auto-refresh setting says otherwise. */
 export const FRESH_FOR_MS = 10 * 60 * 1000;
 
 /** When a reading was taken, and until when it is held through a rate limit. */
@@ -84,7 +84,12 @@ function windowView(bar: Bar | null, now: number): WindowView | null {
  * resets, and how old the numbers are. `reading` is null when nothing was measured, which is not
  * the same as a measured zero.
  */
-export function viewLimits(reading: UsageResult | null, info: UsageInfo | null, now: number = Date.now()): LimitsView {
+export function viewLimits(
+  reading: UsageResult | null,
+  info: UsageInfo | null,
+  now: number = Date.now(),
+  freshForMs: number = FRESH_FOR_MS,
+): LimitsView {
   if (reading === null) {
     return {
       usage: "not-measured",
@@ -103,7 +108,7 @@ export function viewLimits(reading: UsageResult | null, info: UsageInfo | null, 
   const hasNumbers = fiveHour !== null || sevenDay !== null;
   // A window that has reset no longer has the percentage it was measured with.
   const reset = [fiveHour, sevenDay].some((window) => window !== null && window.resetsInSeconds === 0);
-  const old = info === null || now - info.measuredAt > FRESH_FOR_MS;
+  const old = info === null || now - info.measuredAt > freshForMs;
   return {
     usage: reading.state,
     fiveHour,

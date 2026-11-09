@@ -5,6 +5,8 @@ export interface Identity {
   /** Only `claude auth status` reports it; the organisation the directory is signed in to. */
   orgId?: string;
   subscriptionType: string;
+  /** Only the login's profile reports it; see server/profile.ts. */
+  rateLimitTier?: string;
 }
 
 export interface Bar {

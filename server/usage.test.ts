@@ -383,3 +383,322 @@ test("an answer that is not a reading is stamped with the attempt and holds noth
   assert.equal((await usage.measure(DIR, HOME, false)).state, "expired");
   assert.deepEqual(usage.info(DIR), { measuredAt: 7_000, heldUntil: null });
 });
+
+// --- the auto-refresh interval -----------------------------------------------------------
+
+test("a reading stands for the configured interval, and a changed interval applies at once", async () => {
+  let clock = 0;
+  let minutes = 10;
+  const usage = createUsage(
+    {
+      readCredential: async () => ({ token: "token", expiresAt: null }),
+      request: async () => body(200, { five_hour: { utilization: 1, resets_at: "x" } }),
+      version: async () => "2",
+      now: () => clock,
+    },
+    () => minutes * 60_000,
+  );
+  await usage.measure(DIR, HOME, false);
+  clock = 5 * 60_000;
+  assert.equal(usage.stale(DIR), false);
+  minutes = 3;
+  assert.equal(usage.stale(DIR), true);
+});
+
+test("the interval leaves a 429's own wait alone", async () => {
+  let clock = 0;
+  const usage = createUsage(
+    {
+      readCredential: async () => ({ token: "token", expiresAt: null }),
+      request: async () => ({ status: 429, headers: new Headers({ "retry-after": "1500" }), text: async () => "" }) as Response,
+      version: async () => "2",
+      now: () => clock,
+    },
+    () => 5 * 60_000,
+  );
+  await usage.measure(DIR, HOME, false);
+  clock = 10 * 60_000;
+  assert.equal(usage.stale(DIR), false);
+  clock = 1500 * 1000 + 1;
+  assert.equal(usage.stale(DIR), true);
+});
+
+// --- one reading at a time per directory ---------------------------------------------------
+
+/** A promise opened from outside, so a test can hold a reading in flight. */
+function gate() {
+  let open!: () => void;
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return { open, opened };
+}
+
+test("two background callers at once cost one request and get the same answer", async () => {
+  let requests = 0;
+  const hold = gate();
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => {
+      requests += 1;
+      await hold.opened;
+      return ok();
+    },
+    version: async () => "2",
+  });
+  const first = usage.measure(DIR, HOME, false);
+  const second = usage.measure(DIR, HOME, false);
+  hold.open();
+  assert.deepEqual(await first, await second);
+  assert.equal(requests, 1);
+});
+
+test("different directories do not wait on each other", async () => {
+  let requests = 0;
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => ((requests += 1), ok()),
+    version: async () => "2",
+  });
+  await Promise.all([usage.measure(DIR, HOME, false), usage.measure("/Users/me/.claude-other", HOME, false)]);
+  assert.equal(requests, 2);
+});
+
+test("a person joining a background reading that hit a Keychain dialog takes their own afterwards", async () => {
+  const hold = gate();
+  const timeouts: Array<number | null> = [];
+  let requests = 0;
+  const usage = createUsage({
+    readCredential: async (_service, timeoutMs) => {
+      timeouts.push(timeoutMs);
+      if (timeoutMs !== null) {
+        await hold.opened;
+        throw new KeychainTimeout("dialog");
+      }
+      return { token: "token", expiresAt: null };
+    },
+    request: async () => ((requests += 1), ok()),
+    version: async () => "2",
+  });
+  const background = usage.measure(DIR, HOME, false);
+  const manual = usage.measure(DIR, HOME, true);
+  hold.open();
+  assert.equal((await background).state, "unauthorised");
+  assert.equal((await manual).state, "ok");
+  assert.deepEqual(timeouts, [3_000, null]);
+  assert.equal(requests, 1);
+});
+
+test("a person joining a background reading that worked takes its answer", async () => {
+  const hold = gate();
+  let reads = 0;
+  const usage = createUsage({
+    readCredential: async () => {
+      reads += 1;
+      return { token: "token", expiresAt: null };
+    },
+    request: async () => {
+      await hold.opened;
+      return ok();
+    },
+    version: async () => "2",
+  });
+  const background = usage.measure(DIR, HOME, false);
+  const manual = usage.measure(DIR, HOME, true);
+  hold.open();
+  await background;
+  assert.equal((await manual).state, "ok");
+  assert.equal(reads, 1);
+});
+
+test("a background caller joining a manual reading waits for it instead of measuring", async () => {
+  const hold = gate();
+  const timeouts: Array<number | null> = [];
+  const usage = createUsage({
+    readCredential: async (_service, timeoutMs) => {
+      timeouts.push(timeoutMs);
+      await hold.opened;
+      return { token: "token", expiresAt: null };
+    },
+    request: async () => ok(),
+    version: async () => "2",
+  });
+  const manual = usage.measure(DIR, HOME, true);
+  const background = usage.measure(DIR, HOME, false);
+  hold.open();
+  await manual;
+  assert.equal((await background).state, "ok");
+  assert.deepEqual(timeouts, [null]);
+});
+
+test("a poll joining a manual reading does not wait out a Keychain dialog", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const hold = gate();
+  const usage = createUsage({
+    readCredential: async () => {
+      await hold.opened;
+      return { token: "token", expiresAt: null };
+    },
+    request: async () => ok(),
+    version: async () => "2",
+  });
+  const manual = usage.measure(DIR, HOME, true);
+  const background = usage.measure(DIR, HOME, false);
+  t.mock.timers.tick(3_000);
+  assert.equal((await background).state, "unauthorised");
+  hold.open();
+  assert.equal((await manual).state, "ok");
+});
+
+test("a measurement that rejects leaves nothing behind, so the next one really runs", async () => {
+  let fail = true;
+  let reads = 0;
+  const usage = createUsage({
+    readCredential: async () => {
+      reads += 1;
+      throw new KeychainTimeout("dialog");
+    },
+    request: async () => body(200, {}),
+    version: async () => "2",
+    // The Keychain branch stamps the entry with the time, so this makes the measurement reject.
+    now: () => {
+      if (fail) throw new Error("the clock broke");
+      return 0;
+    },
+  });
+  await assert.rejects(usage.measure(DIR, HOME, false), /the clock broke/);
+  fail = false;
+  assert.equal((await usage.measure(DIR, HOME, false)).state, "unauthorised");
+  assert.equal(reads, 2);
+});
+
+// --- telling the history about a fresh reading --------------------------------------------
+
+test("a fresh reading is announced once, with when it was measured", async () => {
+  const heard: Array<[string, number, number]> = [];
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => ok(),
+    version: async () => "2",
+    now: () => 7_000,
+    onReading: (dir, result, measuredAt) => heard.push([dir, result.fiveHour?.utilization ?? -1, measuredAt]),
+  });
+  await usage.measure(DIR, HOME, false);
+  assert.deepEqual(heard, [[DIR, 12, 7_000]]);
+});
+
+test("numbers kept through a 429, an expired token and a failure are not announced", async () => {
+  let status = 200;
+  let expiresAt: number | null = null;
+  const heard: string[] = [];
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt }),
+    request: async () =>
+      status === 200 ? ok() : ({ status: 429, headers: new Headers({ "retry-after": "1500" }), text: async () => "" } as Response),
+    version: async () => "2",
+    now: () => 5_000,
+    onReading: (dir) => heard.push(dir),
+  });
+  await usage.measure(DIR, HOME, false);
+  status = 429;
+  await usage.measure(DIR, HOME, false);
+  status = 200;
+  expiresAt = 1_000;
+  await usage.measure(DIR, HOME, false);
+  assert.deepEqual(heard, [DIR]);
+});
+
+test("a body with no windows is not announced", async () => {
+  const heard: string[] = [];
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => body(200, {}),
+    version: async () => "2",
+    onReading: (dir) => heard.push(dir),
+  });
+  assert.equal((await usage.measure(DIR, HOME, false)).state, "none");
+  assert.deepEqual(heard, []);
+});
+
+test("a listener that throws or rejects costs the reading nothing", async () => {
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => ok(),
+    version: async () => "2",
+    onReading: () => {
+      throw new Error("no room in the history");
+    },
+  });
+  assert.equal((await usage.measure(DIR, HOME, false)).state, "ok");
+
+  const rejecting = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => ok(),
+    version: async () => "2",
+    onReading: async () => {
+      throw new Error("no room in the history");
+    },
+  });
+  assert.equal((await rejecting.measure(DIR, HOME, false)).state, "ok");
+});
+
+test("a failed request keeps the last numbers beside the error, with their own age", async () => {
+  let clock = 1_000;
+  let failing = false;
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => {
+      if (failing) throw new Error("network down");
+      return ok();
+    },
+    version: async () => "2",
+    now: () => clock,
+  });
+  const first = await usage.measure(DIR, HOME, false);
+  assert.equal(first.state, "ok");
+  failing = true;
+  clock = 900_000;
+  const second = await usage.measure(DIR, HOME, false);
+  assert.equal(second.state, "error");
+  assert.equal(second.error, "network down");
+  assert.deepEqual(second.fiveHour, first.fiveHour);
+  assert.equal(usage.info(DIR)?.measuredAt, 1_000);
+});
+
+test("a 429 after a failed request keeps the numbers too, with the age of the last good reading", async () => {
+  let clock = 1_000;
+  let answer = "ok";
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => {
+      if (answer === "throw") throw new Error("network down");
+      if (answer === "429") return { status: 429, headers: new Headers({ "retry-after": "1500" }), text: async () => "" } as unknown as Response;
+      return ok();
+    },
+    version: async () => "2",
+    now: () => clock,
+  });
+  const first = await usage.measure(DIR, HOME, false);
+  answer = "throw";
+  clock = 700_000;
+  await usage.measure(DIR, HOME, false);
+  answer = "429";
+  clock = 1_400_000;
+  const held = await usage.measure(DIR, HOME, false);
+  assert.deepEqual(held.fiveHour, first.fiveHour);
+  assert.equal(held.state, "ok");
+  assert.equal(held.error, "");
+  assert.equal(usage.info(DIR)?.measuredAt, 1_000);
+  assert.equal(usage.info(DIR)?.heldUntil, 1_400_000 + 1_500_000);
+});
+
+test("a failed request says why, not only that it failed", async () => {
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => {
+      throw Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error("connect timed out"), { code: "ETIMEDOUT" }) });
+    },
+    version: async () => "2",
+  });
+  assert.equal((await usage.measure(DIR, HOME, false)).error, "fetch failed (ETIMEDOUT)");
+});

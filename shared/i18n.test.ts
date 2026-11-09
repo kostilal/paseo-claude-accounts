@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detectLocale, resolveLocale, t } from "./i18n.ts";
+import { USAGE_BAD_KEYCHAIN, USAGE_NOT_IN_TIME, USAGE_NO_TOKEN, USAGE_RATE_LIMITED, detectLocale, pickLocale, resolveLocale, t, usageErrorText } from "./i18n.ts";
 
 /** Swaps `Intl` for the duration of one test. */
 function withoutIntl<T>(body: () => T): T {
@@ -75,4 +75,35 @@ test("every locale carries every string", () => {
       assert.notEqual(strings[key], "", `${locale}'s ${String(key)} is empty`);
     }
   }
+});
+
+test("Paseo's own language wins over the device's", () => {
+  assert.equal(pickLocale("ru", null, "en"), "ru");
+  assert.equal(pickLocale("en", "en", "ru"), "en");
+});
+
+test("a host that does not say falls back to its saved language, then the device's", () => {
+  assert.equal(pickLocale(null, "uk", "en"), "uk");
+  assert.equal(pickLocale(null, null, "ru"), "ru");
+});
+
+test("a Paseo language this catalogue lacks reads English", () => {
+  assert.equal(pickLocale("ja", null, "ru"), "en");
+  assert.equal(pickLocale("pt-BR", "pt-BR", "en"), "en");
+});
+
+test("a Ukrainian device on system stays Ukrainian though Paseo falls back to English", () => {
+  assert.equal(pickLocale("en", null, "uk"), "uk");
+  assert.equal(pickLocale("en", "en", "uk"), "en");
+});
+
+test("the daemon's English failures reach the reader in the reader's language", () => {
+  const ru = t("ru");
+  assert.equal(usageErrorText(USAGE_RATE_LIMITED, ru), ru.usageRateLimited);
+  assert.equal(usageErrorText(USAGE_NOT_IN_TIME, ru), ru.usageTimedOut);
+  assert.equal(usageErrorText(USAGE_NO_TOKEN, ru), ru.usageNoToken);
+  assert.equal(usageErrorText(USAGE_BAD_KEYCHAIN, ru), ru.usageBadKeychain);
+  assert.equal(usageErrorText("fetch failed", ru), ru.usageNetworkFailed);
+  assert.equal(usageErrorText("fetch failed (ETIMEDOUT)", ru), `${ru.usageNetworkFailed} (ETIMEDOUT)`);
+  assert.equal(usageErrorText("something the system said", ru), "something the system said");
 });

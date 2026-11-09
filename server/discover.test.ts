@@ -294,6 +294,9 @@ test("a discovered row carries the directory's name and its identity", async () 
     sevenDay: null,
     usageErrorCode: "",
     usageError: "",
+    usageAt: null,
+    heldUntil: null,
+    rateLimitTier: "",
   });
 });
 

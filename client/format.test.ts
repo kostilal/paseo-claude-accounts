@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { t } from "../shared/i18n.ts";
 import type { PillAccount, PillState } from "../shared/switch.ts";
-import { exhaustedResetIn, formatWait, hasSpare, pillFigure, pillPercent, tightestOf, usageLine, weekLine } from "./format.ts";
+import { exhaustedResetIn, formatWait, hasSpare, pillFigure, pillPercent, refreshNotice, savedAtText, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
 
 const strings = t("ru");
 const now = Date.parse("2026-09-16T12:00:00Z");
@@ -11,6 +11,7 @@ const later = (minutes: number) => new Date(now + minutes * 60_000).toISOString(
 
 function account(over: Partial<PillAccount> = {}): PillAccount {
   return {
+    usageAt: null,
     label: "work",
     provider: "claude",
     home: "/w/work",
@@ -192,4 +193,58 @@ test("a spare is another logged-in account with room left", () => {
     hasSpare(state([account({ current: true }), account({ fiveHour: { utilization: 95, resetsAt: "" } })])),
     false,
   );
+});
+
+// --- what the popover's Refresh says -------------------------------------------------------
+
+const en = t("en");
+const answered = (over: Partial<Parameters<typeof refreshNotice>[0]>): Parameters<typeof refreshNotice>[0] => ({
+  outcome: "updated",
+  usage: "ok",
+  fiveHour: { utilization: 18.4, resetsAt: later(120) },
+  sevenDay: { utilization: 62, resetsAt: later(2880) },
+  measuredAt: now,
+  heldUntil: null,
+  error: "",
+  code: "",
+  ...over,
+});
+
+test("an updated or recent reading adds nothing: the row's corner says when it was measured", () => {
+  assert.equal(refreshNotice(answered({}), now, en), null);
+  assert.equal(refreshNotice(answered({ outcome: "recent", measuredAt: now - 20_000 }), now, en), null);
+});
+
+test("a row's corner says how long ago it was measured", () => {
+  assert.equal(updatedAgoText(now - 3_000, now, en), "just now");
+  assert.equal(updatedAgoText(now - 26_000, now, en), "26 s ago");
+  assert.equal(updatedAgoText(now - 3 * 60_000, now, en), "3 min ago");
+  assert.equal(updatedAgoText(now - 61_000, now, en), "1 min ago");
+  assert.equal(updatedAgoText(now - 2 * 3_600_000, now, en), "2 h ago");
+  assert.equal(updatedAgoText(now - 3 * 60_000, now, t("ru")), "3 мин назад");
+});
+
+test("numbers held through a rate limit say how long the wait is", () => {
+  const notice = refreshNotice(answered({ outcome: "held", heldUntil: now + 25 * 60_000 }), now, en)!;
+  assert.equal(notice.text, "The usage service asked to wait 25 min");
+  assert.equal(notice.tone, "warn");
+});
+
+test("a plan with no windows says so instead of an empty figure", () => {
+  assert.equal(refreshNotice(answered({ usage: "none", fiveHour: null, sevenDay: null }), now, en)!.text, en.noUsageAllowance);
+});
+
+test("a failure says why", () => {
+  assert.equal(refreshNotice(answered({ outcome: "failed", code: "unknown-account" }), now, en)!.text, en.usageUnknownAccount);
+  assert.equal(refreshNotice(answered({ outcome: "failed", usage: "expired" }), now, en)!.text, en.usageExpired);
+  assert.equal(refreshNotice(answered({ outcome: "failed", usage: "error", error: "boom" }), now, en)!.text, `${en.usageReadFailed} boom`);
+  assert.equal(refreshNotice(answered({ outcome: "failed", usage: "unauthorised" }), now, en)!.text, en.usageReadFailed);
+  assert.equal(refreshNotice(answered({ outcome: "failed", usage: "expired" }), now, en)!.tone, "bad");
+});
+
+test("saved data shows the time alone today and the date on another day", () => {
+  const today = savedAtText(now - 60_000, now, "en");
+  const earlier = savedAtText(now - 3 * 24 * 60 * 60_000, now, "en");
+  assert.notEqual(today, "");
+  assert.ok(earlier.length > today.length, `${earlier} should carry a date beyond ${today}`);
 });
