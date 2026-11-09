@@ -46,10 +46,16 @@ export interface UsageDeps {
   /** Told about each `ok` reading just taken from the endpoint: not one kept through a 429, not
    *  an expired or failed one. */
   onReading?(dir: string, result: UsageResult, measuredAt: number): void;
+  /** Where readings and a 429's wait outlive this process; see server/readings.ts. */
+  saved?: {
+    load(): ReadonlyArray<readonly [string, Entry]>;
+    save(dir: string, entry: Entry): unknown;
+  };
+  log?(line: string): void;
 }
 
-/** On a 429 the endpoint sends a `retry-after` of about 25 minutes; the last good reading
- *  is kept and nothing is asked again until the wait is over. This is the fallback wait. */
+/** A 429 may name a wait, or say 0 or nothing; the last good reading is kept through it, and
+ *  neither a poll nor Reload asks again until it is over. This is the wait when it names none. */
 const DEFAULT_RETRY_AFTER_MS = 25 * 60 * 1000;
 
 function retryAfterMs(response: Response): number {
@@ -112,7 +118,7 @@ function blank(state: UsageState, error = ""): UsageResult {
   return { state, fiveHour: null, sevenDay: null, error };
 }
 
-interface Entry extends UsageInfo {
+export interface Entry extends UsageInfo {
   /** When the entry was written; its freshness window runs from here. */
   at: number;
   result: UsageResult;
@@ -128,8 +134,10 @@ interface Entry extends UsageInfo {
  *  reading in the background; a background read that hits a Keychain dialog is killed and
  *  the directory drops back to `unauthorised` rather than blocking the daemon. */
 export function createUsage(deps: UsageDeps = liveDeps, freshForMs: () => number = () => FRESH_FOR_MS) {
-  const authorisedDirs = new Set<string>();
-  const cache = new Map<string, Entry>();
+  const log = deps.log ?? ((line: string) => console.error(line));
+  const cache = new Map<string, Entry>(deps.saved?.load());
+  // A directory with a saved reading was readable; a Keychain dialog since then takes it back out.
+  const authorisedDirs = new Set<string>(cache.keys());
   const refreshedAt = new Map<string, number>();
   /** The reading under way per directory. A second caller joins it, so overlapping refreshes
    *  cost one request and a slow older reading cannot land on top of a newer one. */
@@ -228,15 +236,20 @@ export function createUsage(deps: UsageDeps = liveDeps, freshForMs: () => number
         const keeping = previous !== null && (previous.fiveHour !== null || previous.sevenDay !== null);
         // The numbers are good and only held: an older failure is not what is wrong now.
         const kept: UsageResult = keeping ? { ...previous, state: "ok", error: "" } : blank("error", USAGE_RATE_LIMITED);
+        const at = now();
         // The numbers kept are the old ones and keep their age; only the hold is new.
-        cache.set(dir, {
-          at: now(),
-          measuredAt: keeping && earlier ? earlier.measuredAt : now(),
-          heldUntil: now() + wait,
+        const held: Entry = {
+          at,
+          measuredAt: keeping && earlier ? earlier.measuredAt : at,
+          heldUntil: at + wait,
           result: kept,
           freshFor: wait,
           onForce: "keep",
-        });
+        };
+        cache.set(dir, held);
+        void deps.saved?.save(dir, held);
+        const token = credential.expiresAt === null ? "token expiry unknown" : `token expires in ${Math.round((credential.expiresAt - at) / 60_000)} min`;
+        log(`accounts: usage endpoint answered 429 for ${dir}: retry-after ${response.headers?.get?.("retry-after") ?? "none"}, ${token}, asking again after ${new Date(at + wait).toISOString()}`);
         return kept;
       } else {
         const meter = parseUsage(await response.text());
@@ -258,8 +271,12 @@ export function createUsage(deps: UsageDeps = liveDeps, freshForMs: () => number
       result = blank("error", message);
     }
     const measuredAt = now();
-    cache.set(dir, { at: measuredAt, measuredAt, heldUntil: null, result, onForce });
-    if (result.state === "ok") announce(dir, result, measuredAt);
+    const entry: Entry = { at: measuredAt, measuredAt, heldUntil: null, result, onForce };
+    cache.set(dir, entry);
+    if (result.state === "ok") {
+      void deps.saved?.save(dir, entry);
+      announce(dir, result, measuredAt);
+    }
     return result;
   }
 

@@ -17,7 +17,7 @@ import {
 import type { Strings } from "../shared/i18n.ts";
 import { loginLabel } from "../shared/identity.ts";
 import { defaultPreferences, preferences } from "../shared/settings.ts";
-import { dayTimeText, formatWait } from "./format.ts";
+import { dayTimeText, formatWait, shortLogins } from "./format.ts";
 import { typeScale } from "./typography.ts";
 import { Banner, Button, Card, Chip, SectionLabel, Skeleton } from "./ui.tsx";
 
@@ -322,6 +322,13 @@ interface Headline {
   note: string;
 }
 
+/** Who to work on: the account at risk, or the one being worked on and then that one. */
+function speedLead(hint: Extract<ForecastHint, { kind: "speed-up" }>, strings: Strings): string {
+  if (hint.servedNow === null) return fill(strings.forecastHeroSpeedLead, { account: hint.title });
+  const [now, next] = shortLogins(hint.servedNow, hint.title);
+  return fill(strings.forecastHeroSpeedNext, { now, next });
+}
+
 function headlineOf(hint: ForecastHint, strings: Strings, locale: string): Headline {
   const at = (time: number) => dayTimeText(time, locale);
   if (hint.kind === "idle-now") {
@@ -356,13 +363,13 @@ function headlineOf(hint: ForecastHint, strings: Strings, locale: string): Headl
     tone: "accent",
     icon: "Zap",
     title: strings.forecastSpeedTitle,
-    lead: fill(strings.forecastHeroSpeedLead, { account: hint.title }),
+    lead: speedLead(hint, strings),
     figures: [
       { value: percent(hint.lostPercent), label: strings.forecastHeroLost },
       { value: at(hint.untilAt), label: strings.forecastHeroReset },
       ...(hint.boostPercent === null ? [] : [{ value: `+${percent(hint.boostPercent)}`, label: strings.forecastHeroBoost }]),
     ],
-    note: `${fill(strings.forecastHeroSpeedNote, { from: at(hint.startAt), extra: percent(hint.extraPercent) })}${hint.shortWindowLimited ? ` ${strings.forecastSpeedLimited}` : ""}`,
+    note: `${fill(strings.forecastHeroSpeedNote, { from: at(hint.startAt), extra: percent(hint.extraPercent), account: hint.title })}${hint.shortWindowLimited ? ` ${strings.forecastSpeedLimited}` : ""}`,
   };
 }
 

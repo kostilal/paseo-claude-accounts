@@ -158,6 +158,7 @@ export interface Strings {
   refreshAllAccounts: string;
   /** In the corner of a row in the popover: when it was last measured. `{ago}`: how long since. */
   updatedAgo: string;
+  rowPaused: string;
   updatedJustNow: string;
   /** `{wait}`: how long the usage service asked to wait. */
   refreshHeld: string;
@@ -169,6 +170,7 @@ export interface Strings {
   forecastMore: string;
   forecastLess: string;
   forecastHeroSpeedLead: string;
+  forecastHeroSpeedNext: string;
   forecastHeroSpeedNote: string;
   forecastHeroLost: string;
   forecastHeroReset: string;
@@ -270,7 +272,7 @@ export interface Strings {
 const en: Strings = {
   sidebarTitle: "Accounts",
   accounts: "Accounts",
-  screenSubtitle: "Your logins. The pill above a chat switches that chat; the account for new chats is set below or with the account button in a workspace header.",
+  screenSubtitle: "Your accounts and their limits. A chat's account is changed in the pill above it.",
   notLoggedIn: "Not logged in",
   logIn: "Log in",
   noWorkspace: "Open a workspace first: a terminal needs one to live in",
@@ -396,6 +398,7 @@ const en: Strings = {
   refreshAccount: "Refresh this account",
   refreshAllAccounts: "Refresh all accounts",
   updatedAgo: "{ago} ago",
+  rowPaused: "paused {wait}",
   updatedJustNow: "just now",
   refreshHeld: "The usage service asked to wait {wait}",
   savedDataNote: "Saved data from {time} · updating…",
@@ -403,7 +406,8 @@ const en: Strings = {
   forecastMore: "Details: chart, accounts, assumptions",
   forecastLess: "Hide details",
   forecastHeroSpeedLead: "{account}: use it first",
-  forecastHeroSpeedNote: "From {from}, {extra} of its week can still be spent by then.",
+  forecastHeroSpeedNext: "Now {now}, then {next}",
+  forecastHeroSpeedNote: "From {from}, {extra} of {account}'s week can still be spent by then.",
   forecastHeroLost: "lost",
   forecastHeroReset: "reset",
   forecastHeroBoost: "pace",
@@ -504,7 +508,7 @@ const en: Strings = {
 const ru: Strings = {
   sidebarTitle: "Аккаунты",
   accounts: "Аккаунты",
-  screenSubtitle: "Твои входы. Пилка над чатом переключает этот чат; аккаунт для новых чатов задаётся ниже или кнопкой аккаунтов в шапке воркспейса.",
+  screenSubtitle: "Твои аккаунты и их лимиты. Аккаунт чата меняется в пилюле над ним.",
   notLoggedIn: "Не выполнен вход",
   logIn: "Войти",
   noWorkspace: "Сначала открой воркспейс: терминалу нужно в чём-то жить",
@@ -553,7 +557,7 @@ const ru: Strings = {
   reloadFailed: "Не удалось обновить.",
   pillEmptyTitle: "Аккаунтов пока нет",
   pillEmptyDetail: "Сначала добавь в разделе «Аккаунты».",
-  defaultAccount: "По умолчанию",
+  defaultAccount: "Дефолт",
   addAccount: "Добавить аккаунт",
   add: "Добавить",
   chooseProvider: "Провайдер",
@@ -630,6 +634,7 @@ const ru: Strings = {
   refreshAccount: "Обновить этот аккаунт",
   refreshAllAccounts: "Обновить все аккаунты",
   updatedAgo: "{ago} назад",
+  rowPaused: "пауза {wait}",
   updatedJustNow: "только что",
   refreshHeld: "Сервис лимитов попросил подождать {wait}",
   savedDataNote: "Сохранённые данные от {time} · обновляю…",
@@ -637,7 +642,8 @@ const ru: Strings = {
   forecastMore: "Подробнее: график, аккаунты, допущения",
   forecastLess: "Свернуть",
   forecastHeroSpeedLead: "{account}: используй его первым",
-  forecastHeroSpeedNote: "С {from} можно успеть потратить ещё {extra} его недели.",
+  forecastHeroSpeedNext: "Сейчас {now}, потом {next}",
+  forecastHeroSpeedNote: "С {from} можно успеть потратить ещё {extra} недели {account}.",
   forecastHeroLost: "сгорит",
   forecastHeroReset: "сброс",
   forecastHeroBoost: "к темпу",
@@ -738,7 +744,7 @@ const ru: Strings = {
 const uk: Strings = {
   sidebarTitle: "Акаунти",
   accounts: "Акаунти",
-  screenSubtitle: "Твої входи. Пілка над чатом перемикає цей чат; акаунт для нових чатів задається нижче або кнопкою акаунтів у шапці воркспейсу.",
+  screenSubtitle: "Твої акаунти та їхні ліміти. Акаунт чату змінюється в пілюлі над ним.",
   notLoggedIn: "Вхід не виконано",
   logIn: "Увійти",
   noWorkspace: "Спочатку відкрий воркспейс: терміналу потрібно десь жити",
@@ -787,7 +793,7 @@ const uk: Strings = {
   reloadFailed: "Не вдалося оновити.",
   pillEmptyTitle: "Акаунтів поки немає",
   pillEmptyDetail: "Спочатку додай у розділі «Акаунти».",
-  defaultAccount: "За замовчуванням",
+  defaultAccount: "Дефолт",
   addAccount: "Додати акаунт",
   add: "Додати",
   chooseProvider: "Провайдер",
@@ -864,6 +870,7 @@ const uk: Strings = {
   refreshAccount: "Оновити цей акаунт",
   refreshAllAccounts: "Оновити всі акаунти",
   updatedAgo: "{ago} тому",
+  rowPaused: "пауза {wait}",
   updatedJustNow: "щойно",
   refreshHeld: "Сервіс лімітів попросив зачекати {wait}",
   savedDataNote: "Збережені дані від {time} · оновлюю…",
@@ -871,7 +878,8 @@ const uk: Strings = {
   forecastMore: "Детальніше: графік, акаунти, припущення",
   forecastLess: "Згорнути",
   forecastHeroSpeedLead: "{account}: використай його першим",
-  forecastHeroSpeedNote: "З {from} можна встигнути витратити ще {extra} його тижня.",
+  forecastHeroSpeedNext: "Зараз {now}, потім {next}",
+  forecastHeroSpeedNote: "З {from} можна встигнути витратити ще {extra} тижня {account}.",
   forecastHeroLost: "згорить",
   forecastHeroReset: "скидання",
   forecastHeroBoost: "до темпу",

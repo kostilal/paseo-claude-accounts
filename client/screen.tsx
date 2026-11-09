@@ -26,7 +26,7 @@ import { ForecastCard } from "./forecast.tsx";
 import { revealNotice } from "./reveal-notice.ts";
 import { AccountRing } from "./ring.tsx";
 import { typeScale } from "./typography.ts";
-import { Banner, Button, Card, Chip, EmptyState, Meter, RADIUS, Screen, ScreenHeader, SectionLabel, Skeleton } from "./ui.tsx";
+import { Banner, Button, Card, Chip, EmptyState, Meter, RADIUS, Screen, ScreenHeader, SectionLabel, Skeleton, TrashDot } from "./ui.tsx";
 
 /** A row is named by its login, falling back to the directory name. */
 function loginTitle(row: AccountView, strings: Strings): string {
@@ -54,6 +54,7 @@ function detailLine(row: AccountView, strings: Strings): string {
   if (row.subscriptionType !== "") parts.push(row.subscriptionType);
   const tightest = tightestOf(row.fiveHour, row.sevenDay);
   if (tightest !== null) parts.push(`${Math.round(tightest)}%`);
+  if (row.autoNow) parts.push(strings.autoNowBadge);
   return parts.join(" · ");
 }
 
@@ -81,9 +82,16 @@ interface DeleteState {
   onConfirm: () => void;
 }
 
-function DeleteButton({ theme, strings, state }: { theme: PluginTheme; strings: Strings; state: DeleteState }) {
-  if (state.confirming) return null;
-  return <Button theme={theme} label={strings.deleteAccount} variant="danger" disabled={state.pending} onPress={state.onAsk} />;
+function DeleteButton({ theme, strings, state, title }: { theme: PluginTheme; strings: Strings; state: DeleteState; title: string }) {
+  return (
+    <TrashDot
+      theme={theme}
+      label={`${strings.deleteAccount}: ${title}`}
+      active={state.confirming}
+      disabled={state.pending}
+      onPress={state.confirming ? state.onCancel : state.onAsk}
+    />
+  );
 }
 
 function DeleteConfirm({
@@ -151,7 +159,7 @@ function moveAllSummary(
   return parts.join(" · ");
 }
 
-/** "New chats here" on a card: makes that login the one new chats of its provider open on. */
+/** The Default chip on a card: makes that login the one new chats of its provider open on. */
 interface NewChatsState {
   /** Whether the row can be chosen and is not the default already. */
   available: boolean;
@@ -164,6 +172,7 @@ function LoginCard({
   theme,
   row,
   strings,
+  now,
   showUsage,
   onShowUsage,
   logIn,
@@ -175,6 +184,7 @@ function LoginCard({
   theme: PluginTheme;
   row: AccountView;
   strings: Strings;
+  now: number;
   showUsage: RowMutation<{ usageErrorCode: "" | "unknown-account"; usageError: string }>;
   onShowUsage: () => void;
   logIn: RowMutation<{ code: "" | "no-workspace" | "unknown-account"; error: string; terminal: string }>;
@@ -186,7 +196,6 @@ function LoginCard({
   const title = loginTitle(row, strings);
   const tightest = tightestOf(row.fiveHour, row.sevenDay);
   const revealFailure = row.loggedIn ? revealNotice(showUsage, row.switchTo, strings) : null;
-  const now = Date.now();
 
   // Only failures: an opened terminal says what to do and when it is done, and a note that it
   // opened would outlive the approval.
@@ -218,13 +227,26 @@ function LoginCard({
           <Text style={{ ...typeScale.title, color: theme.colors.foreground }} numberOfLines={1}>
             {title}
           </Text>
-          <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
+          <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={2}>
             {detailLine(row, strings)}
           </Text>
         </View>
-        <View style={{ flexShrink: 0, flexDirection: "row", gap: 6 }}>
-          {row.isDefault && <Chip theme={theme} label={strings.defaultAccount} />}
-          {row.autoNow && <Chip theme={theme} label={strings.autoNowBadge} />}
+        <View style={{ flexShrink: 0, flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 8 }}>
+          {row.isDefault ? (
+            <Chip theme={theme} label={strings.defaultAccount} quiet selected />
+          ) : (
+            newChats.available && (
+              <Chip
+                theme={theme}
+                label={strings.defaultAccount}
+                quiet
+                accessibilityLabel={`${strings.newChatsHere}: ${title}`}
+                disabled={newChats.pending}
+                onPress={newChats.onPress}
+              />
+            )
+          )}
+          <DeleteButton theme={theme} strings={strings} state={deleting} title={title} />
         </View>
       </View>
 
@@ -257,6 +279,11 @@ function LoginCard({
       {row.loggedIn && row.usage === "expired" && (
         <Text style={{ ...typeScale.meta, color: theme.colors.statusDanger }}>{strings.usageExpired}</Text>
       )}
+      {row.heldUntil !== null && row.heldUntil > now && (
+        <Text style={{ ...typeScale.meta, color: theme.colors.statusWarning }}>
+          {strings.refreshHeld.replace("{wait}", formatWait(row.heldUntil - now, strings))}
+        </Text>
+      )}
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {row.loggedIn && (row.usage === "unauthorised" || row.usage === "error") && revealFailure === null && (
@@ -265,11 +292,7 @@ function LoginCard({
         {(!row.loggedIn || row.usage === "expired") && (
           <Button theme={theme} label={strings.logIn} variant="ghost" disabled={logIn.isPending} onPress={onLogIn} />
         )}
-        {newChats.available && (
-          <Button theme={theme} label={strings.newChatsHere} icon="MessageSquarePlus" variant="ghost" disabled={newChats.pending} onPress={newChats.onPress} />
-        )}
         <MoveAllButton theme={theme} state={moving} />
-        <DeleteButton theme={theme} strings={strings} state={deleting} />
       </View>
       <DeleteConfirm theme={theme} strings={strings} state={deleting} question={strings.deleteConfirm} />
       {newChats.failed && <Banner theme={theme} tone="bad" text={strings.defaultSettingFailed} />}
@@ -299,7 +322,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
   const watching = Date.now() < watchUntil;
   // Polling waits while a forced read runs; the read's own invalidation refetches when it is done.
   const reloading = useIsMutating({ mutationKey: ["accounts", "reload"] }) > 0;
-  const { data: live, isError, error, refetch } = useQuery({
+  const { data: live, dataUpdatedAt, isError, error, refetch } = useQuery({
     queryKey: overviewKey,
     queryFn: () => fetchOverview({ refresh: watching, force: false }),
     gcTime: Infinity,
@@ -317,6 +340,9 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
   });
   const data = live ?? snapshot?.overview ?? undefined;
   const onSnapshot = live === undefined && data !== undefined;
+  // Reading `dataUpdatedAt` draws the cards again on every poll, or a wait on them would stand
+  // still while the numbers do not change.
+  const now = Math.max(Date.now(), dataUpdatedAt);
   const invalidate = () => {
     setWatchUntil(Date.now() + 5 * 60_000);
     void queryClient.invalidateQueries({ queryKey: overviewKey });
@@ -496,7 +522,8 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
         layout={layout}
         icon="Users"
         title={strings.accounts}
-        subtitle={strings.screenSubtitle}
+        // A phone needs the room for the accounts themselves.
+        subtitle={layout.compact ? undefined : strings.screenSubtitle}
         trailing={
           <Button
             theme={theme}
@@ -554,6 +581,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
                   theme={theme}
                   row={row}
                   strings={strings}
+                  now={now}
                   showUsage={showUsage}
                   onShowUsage={() => showUsage.mutate(row.switchTo)}
                   logIn={logIn}
@@ -589,7 +617,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
                       disabled={add.isPending && add.variables === account.id}
                       onPress={() => add.mutate(account.id)}
                     />
-                    <DeleteButton theme={theme} strings={strings} state={deleteState(account)} />
+                    <DeleteButton theme={theme} strings={strings} state={deleteState(account)} title={loginTitle(account, strings)} />
                   </View>
                   <DeleteConfirm
                     theme={theme}

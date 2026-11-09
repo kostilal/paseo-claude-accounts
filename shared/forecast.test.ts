@@ -333,7 +333,46 @@ test("plenty left: the account resetting soonest is the one to use first, faster
   assert.equal(speedUp.startAt, NOW);
   assert.ok(speedUp.extraPercent >= 1);
   assert.ok(speedUp.boostPercent !== null && speedUp.boostPercent > 0);
+  assert.equal(speedUp.servedNow, null, "the account at risk is the one to work on, so nobody else is named");
   assert.equal(result.hints.some((hint) => hint.kind === "slow-down"), false);
+});
+
+test("when the account at risk is not the one being worked on, the hint says who is", () => {
+  // The pace fills the sooner week in time, so what is lost is the other account's.
+  const soon = h(120);
+  const late = h(135);
+  const result = run(
+    [
+      row("late", { sevenDay: { utilization: 0, resetsAt: iso(late) } }),
+      row("soon", { sevenDay: { utilization: 22, resetsAt: iso(soon) } }),
+    ],
+    {
+      late: history({ hours: 30, usedNow: 0, perHour: 0, resetsAt: late }),
+      soon: history({ hours: 30, usedNow: 22, perHour: 0.7, resetsAt: soon }),
+    },
+  );
+  const speedUp = hintOf(result, "speed-up");
+  assert.equal(speedUp.key, "late");
+  assert.equal(speedUp.servedNow, "soon@example.com");
+});
+
+test("an account that cannot take work yet is not named as the one to work on now", () => {
+  const soon = h(20);
+  const late = h(120);
+  const result = run(
+    [
+      row("soon", { fiveHour: { utilization: 100, resetsAt: iso(h(2)) }, sevenDay: { utilization: 10, resetsAt: iso(soon) } }),
+      row("late", { fiveHour: { utilization: 0, resetsAt: iso(h(3)) }, sevenDay: { utilization: 10, resetsAt: iso(late) } }),
+    ],
+    {
+      soon: history({ hours: 30, usedNow: 10, perHour: 0.2, resetsAt: soon }),
+      late: history({ hours: 30, usedNow: 10, perHour: 0.2, resetsAt: late }),
+    },
+  );
+  const speedUp = hintOf(result, "speed-up");
+  assert.equal(speedUp.key, "soon");
+  assert.equal(speedUp.startAt, h(2));
+  assert.equal(speedUp.servedNow, "late@example.com");
 });
 
 test("no speed-up is promised when the short window already takes all the soonest account can give", () => {

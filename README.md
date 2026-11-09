@@ -31,8 +31,8 @@ composer: the session restarts on that account and the conversation carries on.
   login: Paseo shows what to choose instead of an auth error.
 - **Default in the header.** The **Users** button in a workspace's header picks the account
   every new chat opens on: **Auto**, or one account. The pill above a chat switches that chat.
-- **On an account's card.** **New chats here** on the Accounts screen makes that account the
-  default every new chat opens on.
+- **On an account's card.** The **Default** chip at the top of a card on the Accounts screen is
+  lit on the account every new chat opens on; pressing a grey one makes that account the default.
 - **One account per task** (Settings, off by default): Auto's first pick in a workspace holds for
   all its new chats, until the default changes. Off, every new chat is picked on its own.
 - **On the new-workspace screen**, where there is no workspace header yet: **+** in the composer →
@@ -146,7 +146,7 @@ directory. The screen and the pill try to read every logged-in account in the ba
 often as the **Auto-refresh** setting says (every ten minutes by default). If macOS has not yet allowed Keychain access, a background read gives up
 after three seconds and the row shows **Show usage** instead; a dialog may flash briefly. Press
 **Show usage** once and choose "Always Allow" so later reads go through without asking.
-The endpoint rate-limits aggressively; on a 429 the last reading is kept until the wait is over.
+The endpoint rate-limits aggressively; on a 429 the last reading is kept until the wait is over, a reload of the plugin or a daemon restart keeps both, and the row says how long the wait has left.
 
 **The forecast** works from what that endpoint reports, percentages and reset times for the 5-hour
 window and the week, and from the plugin's own record of them, kept for eight days. No request is
@@ -181,13 +181,14 @@ history only grows while Paseo is open.
 | Accounts, per-chat choices, hidden directories | `~/.paseo-claude-accounts/accounts.json` |
 | The last overview the Accounts screen was given, with its emails (mode 0600) | `~/.paseo-claude-accounts/overview-snapshot.json` |
 | The last eight days of usage readings, for the forecast: percentages and reset times (mode 0600) | `~/.paseo-claude-accounts/usage-history.json` |
+| Each account's last usage reading and any wait the usage service asked for, so a reload keeps them (mode 0600) | `~/.paseo-claude-accounts/usage-readings.json` |
 | Each account's login | Claude Code's own Keychain item for that config directory; the plugin reads it, never writes it |
 
 The plugin keeps no secret of its own: it stores no tokens, the state file holds only account
 labels, directories and chat choices, and the saved overview holds what the Accounts screen shows. A switched session names the account's directory in its
 process environment; Claude Code reads the login from the Keychain itself.
 
-**Delete** on the Accounts screen only forgets an account: its directory and login stay.
+The **trash** icon on the Accounts screen only forgets an account: its directory and login stay.
 **Show hidden** brings it back.
 
 ## Settings

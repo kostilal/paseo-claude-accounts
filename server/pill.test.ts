@@ -399,8 +399,9 @@ test("a row carries when its reading was measured, from the directory that answe
       readRegistry: async () => ({ ...emptyRegistry(), accounts: [site] }),
       identify: async () => ({ loggedIn: true, email: "s@x", orgName: "", subscriptionType: "max" }),
       usageFor: async () => ({ state: "ok", fiveHour: null, sevenDay: { utilization: 5, resetsAt: "2026-11-10T00:00:00Z" }, error: "" }),
-      info: (home) => (home === site.home ? { measuredAt: 1234, heldUntil: null } : null),
+      info: (home) => (home === site.home ? { measuredAt: 1234, heldUntil: 5678 } : null),
     }),
   );
   assert.equal(state.accounts[0]!.usageAt, 1234);
+  assert.equal(state.accounts[0]!.heldUntil, 5678);
 });

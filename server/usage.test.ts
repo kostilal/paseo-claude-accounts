@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { KeychainTimeout } from "./keychain.ts";
-import { createUsage } from "./usage.ts";
+import { type Entry, createUsage } from "./usage.ts";
 
 const DIR = "/Users/me/.claude-work";
 const HOME = "/Users/me/.claude";
@@ -701,4 +701,130 @@ test("a failed request says why, not only that it failed", async () => {
     version: async () => "2",
   });
   assert.equal((await usage.measure(DIR, HOME, false)).error, "fetch failed (ETIMEDOUT)");
+});
+
+/** One account behind an endpoint the test answers for, over runs sharing the saved readings. */
+function restartable() {
+  const kept = new Map<string, Entry>();
+  const run = {
+    clock: 0,
+    status: 200,
+    asked: 0,
+    start: () =>
+      createUsage({
+        readCredential: async () => ({ token: "token", expiresAt: null }),
+        request: async () => {
+          run.asked += 1;
+          return run.status === 200
+            ? body(200, { seven_day: { utilization: 62, resets_at: "2026-11-12T00:00:00Z" } })
+            : ({ status: 429, headers: new Headers({ "retry-after": "3600" }), text: async () => "" } as unknown as Response);
+        },
+        version: async () => "2",
+        now: () => run.clock,
+        saved: { load: () => [...kept], save: (dir, entry) => void kept.set(dir, entry) },
+      }),
+  };
+  return run;
+}
+
+test("a 429's wait and the numbers it kept survive a restart, and nothing is asked until it is over", async () => {
+  const run = restartable();
+  const before = run.start();
+  await before.measure(DIR, HOME, true);
+  run.status = 429;
+  run.clock = 11 * 60_000;
+  await before.measure(DIR, HOME, false);
+  assert.equal(run.asked, 2);
+
+  const after = run.start();
+  assert.equal(after.cached(DIR)?.state, "ok");
+  assert.equal(after.cached(DIR)?.sevenDay?.utilization, 62);
+  assert.deepEqual(after.info(DIR), { measuredAt: 0, heldUntil: 11 * 60_000 + 3_600_000 });
+  assert.equal(after.stale(DIR), false);
+  assert.equal(after.stale(DIR, true), false);
+  assert.equal(run.asked, 2);
+  run.clock += 3_600_000 + 1;
+  assert.equal(after.stale(DIR), true);
+});
+
+test("a wait with no numbers to keep survives a restart too", async () => {
+  const run = restartable();
+  run.status = 429;
+  await run.start().measure(DIR, HOME, true);
+  const after = run.start();
+  assert.equal(after.cached(DIR)?.state, "error");
+  assert.equal(after.stale(DIR), false);
+  assert.equal(after.stale(DIR, true), false);
+});
+
+test("a 429 right after a restart keeps the numbers the run before it saved", async () => {
+  const run = restartable();
+  await run.start().measure(DIR, HOME, true);
+  run.clock = 11 * 60_000;
+  run.status = 429;
+  const after = run.start();
+  assert.equal(after.stale(DIR), true);
+  const held = await after.measure(DIR, HOME, false);
+  assert.equal(held.state, "ok");
+  assert.equal(held.error, "");
+  assert.equal(held.sevenDay?.utilization, 62);
+  assert.equal(after.info(DIR)?.measuredAt, 0);
+});
+
+test("a reading still fresh costs no request after a restart, and its directory stays authorised", async () => {
+  const run = restartable();
+  await run.start().measure(DIR, HOME, true);
+  run.clock = 5 * 60_000;
+  const after = run.start();
+  assert.equal(after.stale(DIR), false);
+  assert.equal(after.authorised(DIR), true);
+  assert.equal(run.asked, 1);
+});
+
+test("only readings and waits are saved: not a failure, an expired token, a dialog or an empty answer", async () => {
+  const kept = new Map<string, Entry>();
+  const deps = { version: async () => "2", saved: { load: () => [], save: (dir: string, entry: Entry) => void kept.set(dir, entry) } };
+  const credential = async () => ({ token: "token", expiresAt: null });
+  const dialog = async () => {
+    throw new KeychainTimeout("dialog");
+  };
+  const down = async () => {
+    throw new Error("network down");
+  };
+  await createUsage({ ...deps, readCredential: dialog, request: async () => ok() }).measure(DIR, HOME, false);
+  await createUsage({ ...deps, readCredential: async () => ({ token: "token", expiresAt: 1 }), request: async () => ok(), now: () => 2 }).measure(DIR, HOME, false);
+  await createUsage({ ...deps, readCredential: credential, request: down }).measure(DIR, HOME, false);
+  await createUsage({ ...deps, readCredential: credential, request: async () => body(200, {}) }).measure(DIR, HOME, false);
+  assert.equal(kept.size, 0);
+});
+
+test("a 429 is logged with the wait it named and how long the token has left, never the token", async () => {
+  const lines: string[] = [];
+  const usage = createUsage({
+    readCredential: async () => ({ token: "sk-ant-secret", expiresAt: 40 * 60_000 }),
+    request: async () => ({ status: 429, headers: new Headers({ "retry-after": "3600" }), text: async () => "" }) as unknown as Response,
+    version: async () => "2",
+    now: () => 10 * 60_000,
+    log: (line) => lines.push(line),
+  });
+  await usage.measure(DIR, HOME, true);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0]!, /429/);
+  assert.match(lines[0]!, /\.claude-work/);
+  assert.match(lines[0]!, /retry-after 3600/);
+  assert.match(lines[0]!, /token expires in 30 min/);
+  assert.equal(lines[0]!.includes("sk-ant-secret"), false);
+});
+
+test("a 429 that names no wait, on a token of unknown life, says so in the log", async () => {
+  const lines: string[] = [];
+  const usage = createUsage({
+    readCredential: async () => ({ token: "token", expiresAt: null }),
+    request: async () => ({ status: 429, headers: new Headers(), text: async () => "" }) as unknown as Response,
+    version: async () => "2",
+    log: (line) => lines.push(line),
+  });
+  await usage.measure(DIR, HOME, true);
+  assert.match(lines[0]!, /retry-after none/);
+  assert.match(lines[0]!, /token expiry unknown/);
 });

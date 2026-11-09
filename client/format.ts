@@ -159,6 +159,18 @@ export function updatedAgoText(at: number, now: number, strings: Strings): strin
   return strings.updatedAgo.replace("{ago}", ago);
 }
 
+/** What a row's corner says: how long the usage service has asked it to wait, else how old its numbers are. */
+export function rowAgeText(at: number, heldUntil: number | null, now: number, strings: Strings): string {
+  if (heldUntil !== null && heldUntil > now) return strings.rowPaused.replace("{wait}", formatWait(heldUntil - now, strings));
+  return updatedAgoText(at, now, strings);
+}
+
+/** Two logins in the one line there is for both: what comes before the @ will do, if it tells them apart. */
+export function shortLogins(a: string, b: string): [string, string] {
+  const [first, second] = [a.split("@")[0]!, b.split("@")[0]!];
+  return first === second ? [a, b] : [first, second];
+}
+
 /** What an account's row says after its refresh, when its corner's time does not say it already. */
 export function refreshNotice(
   answer: RefreshAccountAnswer,

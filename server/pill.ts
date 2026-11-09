@@ -110,6 +110,7 @@ export async function pillStateFor(input: PillInput, deps: PillDeps): Promise<Pi
               return reading;
             });
       const from = answered.get(usage);
+      const info = from === undefined ? null : (deps.info?.(from) ?? null);
       return {
         label: landsOnAccount?.label ?? landsOn,
         provider: landsOnAccount?.provider ?? "claude",
@@ -126,7 +127,8 @@ export async function pillStateFor(input: PillInput, deps: PillDeps): Promise<Pi
         usage: usage.state,
         fiveHour: usage.fiveHour,
         sevenDay: usage.sevenDay,
-        usageAt: from === undefined ? null : (deps.info?.(from)?.measuredAt ?? null),
+        usageAt: info?.measuredAt ?? null,
+        heldUntil: info?.heldUntil ?? null,
       };
     }),
   );

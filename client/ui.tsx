@@ -149,19 +149,24 @@ export function Chip({
   label,
   selected = false,
   disabled = false,
+  quiet = false,
+  accessibilityLabel,
   onPress,
 }: {
   theme: PluginTheme;
   label: string;
   selected?: boolean;
   disabled?: boolean;
+  /** Smaller, and grey until selected: for the corner of a card. */
+  quiet?: boolean;
+  accessibilityLabel?: string;
   onPress?: () => void;
 }) {
   const body = (
     <View
       style={{
-        paddingVertical: 6,
-        paddingHorizontal: 12,
+        paddingVertical: quiet ? 4 : 6,
+        paddingHorizontal: quiet ? 10 : 12,
         borderRadius: RADIUS.pill,
         borderWidth: 1,
         borderColor: selected ? theme.colors.accent : theme.colors.border,
@@ -170,14 +175,21 @@ export function Chip({
         opacity: disabled ? 0.5 : 1,
       }}
     >
-      <Text style={{ color: selected ? theme.colors.accentForeground : theme.colors.foreground, fontSize: 13 }}>
+      <Text style={{ color: selected ? theme.colors.accentForeground : quiet ? theme.colors.foregroundMuted : theme.colors.foreground, fontSize: quiet ? 12 : 13 }}>
         {label}
       </Text>
     </View>
   );
   if (!onPress) return body;
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ selected, disabled }}
+      disabled={disabled}
+      hitSlop={quiet ? { top: 9, bottom: 9 } : undefined}
+      onPress={onPress}
+    >
       {body}
     </Pressable>
   );
@@ -280,6 +292,45 @@ export function RefreshDot({
       <Animated.View style={{ transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }] }}>
         <Icon name="RefreshCw" size={12} color={theme.colors.foregroundMuted} />
       </Animated.View>
+    </Pressable>
+  );
+}
+
+/** A small round delete control for the corner of a card; red while its question is open. */
+export function TrashDot({
+  theme,
+  label,
+  active,
+  disabled,
+  onPress,
+}: {
+  theme: PluginTheme;
+  label: string;
+  active: boolean;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled, expanded: active }}
+      disabled={disabled}
+      hitSlop={{ top: 9, bottom: 9 }}
+      onPress={onPress}
+      style={{
+        width: 26,
+        height: 26,
+        borderRadius: RADIUS.pill,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 1,
+        borderColor: active ? theme.colors.statusDanger : theme.colors.border,
+        backgroundColor: theme.colors.surface2,
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <Icon name="Trash2" size={13} color={active ? theme.colors.statusDanger : theme.colors.foregroundMuted} />
     </Pressable>
   );
 }

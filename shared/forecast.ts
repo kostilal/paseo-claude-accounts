@@ -152,6 +152,8 @@ const hint = z.discriminatedUnion("kind", [
     kind: z.literal("speed-up"),
     key: z.string(),
     title: z.string(),
+    /** The account work goes to right now, when that is another: this one's turn comes after it. */
+    servedNow: z.string().nullable(),
     /** From when this account can take more work, until its week resets. */
     startAt: z.number(),
     untilAt: z.number(),
@@ -366,6 +368,13 @@ function room(account: SimAccount): number {
   return Math.max(0, Math.min(byWeek, byFive));
 }
 
+/** Who takes the work now: of the accounts with room, the one whose week resets soonest. */
+function firstUp(accounts: readonly SimAccount[]): SimAccount | undefined {
+  return accounts
+    .filter((account) => room(account) > NOTHING)
+    .sort((a, b) => (a.week.resetsAt ?? Infinity) - (b.week.resetsAt ?? Infinity) || a.index - b.index)[0];
+}
+
 /** Runs the pool forward at `ratePerHour` (capacity units per hour) from `from` to `to`, from one
  *  reset or exhaustion to the next, so every reset lands at its exact time. A cut multiplies the
  *  rate for a stretch of time; that is how a slowdown is tried out. */
@@ -413,10 +422,7 @@ function simulate(
     applyResets(t);
     record(t);
     if (t >= to) break;
-    const candidates = accounts
-      .filter((account) => room(account) > NOTHING)
-      .sort((a, b) => (a.week.resetsAt ?? Infinity) - (b.week.resetsAt ?? Infinity) || a.index - b.index);
-    const first = candidates[0];
+    const first = firstUp(accounts);
     const rate = rateAt(t);
     if (first !== undefined && rate > 0) {
       // Work starts a window that has not started: its reset is counted from here.
@@ -663,6 +669,7 @@ function speedUpHint(
     })
     .filter((candidate): candidate is typeof candidate & { until: number } => candidate.until !== null && candidate.lost >= MIN_LOST_PERCENT && candidate.until - now >= MIN_TIME_TO_ACT_MS)
     .sort((a, b) => a.until - b.until);
+  const serving = firstUp(accounts);
   for (const { account, lost, until } of candidates) {
     const room = spendable(account, now, until);
     const extra = Math.min(lost, Math.max(0, room.amount - nominal.spentBeforeReset[account.index]!));
@@ -674,6 +681,7 @@ function speedUpHint(
       kind: "speed-up",
       key: row.key,
       title: titleOf(row),
+      servedNow: serving === undefined || serving === account ? null : titleOf(rows[serving.index]!),
       startAt: firstFree,
       untilAt: until,
       lostPercent: lost,

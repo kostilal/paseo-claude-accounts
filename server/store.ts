@@ -15,6 +15,9 @@ export const OVERVIEW_SNAPSHOT_FILE = join(STATE_DIR, "overview-snapshot.json");
 
 export const USAGE_HISTORY_FILE = join(STATE_DIR, "usage-history.json");
 
+/** Each directory's last reading and any wait a 429 asked for; see server/readings.ts. */
+export const USAGE_READINGS_FILE = join(STATE_DIR, "usage-readings.json");
+
 /**
  * What the state file is. `absent` is a fresh install and safe to write over; `unreadable`
  * is somebody's state this version did not understand, and must not be overwritten with

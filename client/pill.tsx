@@ -15,7 +15,7 @@ import { type Strings, t } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { nearlyFull } from "../shared/auto.ts";
 import { type PillAccount, type SwitchCode, claudeProvidersRpc, pillStateRpc, switchAccountRpc } from "../shared/switch.ts";
-import { currentOf, exhaustedResetIn, hasSpare, pillFigure, pillPercent, refreshNotice, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
+import { currentOf, exhaustedResetIn, hasSpare, pillFigure, pillPercent, refreshNotice, rowAgeText, tightestOf, usageLine, weekLine } from "./format.ts";
 import { createPillRegistry, trackClaudeAgents } from "./pill-registry.ts";
 import { AccountRing } from "./ring.tsx";
 import { typeScale } from "./typography.ts";
@@ -352,8 +352,8 @@ export function AccountPopover(props: PluginButtonContentProps) {
                     {refreshes && (
                       <View pointerEvents="box-none" style={{ position: "absolute", top: 7, right: 7, flexDirection: "row", alignItems: "center", gap: 6 }}>
                         {account.usageAt !== null && (
-                          <Text numberOfLines={1} style={{ ...typeScale.meta, fontSize: 10, color: theme.colors.foregroundMuted }}>
-                            {updatedAgoText(account.usageAt, now, strings)}
+                          <Text numberOfLines={1} style={{ ...typeScale.meta, fontSize: 10, color: account.heldUntil !== null && account.heldUntil > now ? theme.colors.statusWarning : theme.colors.foregroundMuted }}>
+                            {rowAgeText(account.usageAt, account.heldUntil, now, strings)}
                           </Text>
                         )}
                         <RefreshDot

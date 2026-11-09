@@ -105,6 +105,8 @@ export const pillAccount = z.object({
   sevenDay: bar.nullable().default(null),
   /** When the shown numbers were measured, ms since the epoch; null when nothing was. */
   usageAt: z.number().nullable().default(null),
+  /** Until when a rate limit holds those numbers; null when none does. */
+  heldUntil: z.number().nullable().default(null),
 });
 
 export const pillState = z.object({

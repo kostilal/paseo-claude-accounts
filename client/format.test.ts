@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { t } from "../shared/i18n.ts";
 import type { PillAccount, PillState } from "../shared/switch.ts";
-import { exhaustedResetIn, formatWait, hasSpare, pillFigure, pillPercent, refreshNotice, savedAtText, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
+import { exhaustedResetIn, formatWait, hasSpare, pillFigure, pillPercent, refreshNotice, rowAgeText, savedAtText, shortLogins, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
 
 const strings = t("ru");
 const now = Date.parse("2026-09-16T12:00:00Z");
@@ -12,6 +12,7 @@ const later = (minutes: number) => new Date(now + minutes * 60_000).toISOString(
 function account(over: Partial<PillAccount> = {}): PillAccount {
   return {
     usageAt: null,
+    heldUntil: null,
     label: "work",
     provider: "claude",
     home: "/w/work",
@@ -222,6 +223,20 @@ test("a row's corner says how long ago it was measured", () => {
   assert.equal(updatedAgoText(now - 61_000, now, en), "1 min ago");
   assert.equal(updatedAgoText(now - 2 * 3_600_000, now, en), "2 h ago");
   assert.equal(updatedAgoText(now - 3 * 60_000, now, t("ru")), "3 мин назад");
+});
+
+test("while the usage service makes a row wait, its corner says for how long instead", () => {
+  const measured = now - 3 * 60_000;
+  assert.equal(rowAgeText(measured, now + 15 * 60_000, now, en), "paused 15 min");
+  assert.equal(rowAgeText(measured, now + 15 * 60_000, now, t("ru")), "пауза 15 мин");
+  assert.equal(rowAgeText(measured, now - 1, now, en), "3 min ago");
+  assert.equal(rowAgeText(measured, null, now, en), "3 min ago");
+});
+
+test("two logins in one line lose their domains, unless that is all that tells them apart", () => {
+  assert.deepEqual(shortLogins("devxypro@gmail.com", "sapfotanya@gmail.com"), ["devxypro", "sapfotanya"]);
+  assert.deepEqual(shortLogins("kain@evodev.pro", "kain@gmail.com"), ["kain@evodev.pro", "kain@gmail.com"]);
+  assert.deepEqual(shortLogins("account-1", "me@example.com"), ["account-1", "me"]);
 });
 
 test("numbers held through a rate limit say how long the wait is", () => {

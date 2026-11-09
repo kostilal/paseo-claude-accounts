@@ -61,11 +61,12 @@ import { createProfiles, ownLogin } from "./server/profile.ts";
 import { type CliProvider, createSessionDirs } from "./server/sessionDir.ts";
 import { createSessionLedger } from "./server/sessionLedger.ts";
 import { createProjects } from "./server/projects.ts";
+import { createReadings } from "./server/readings.ts";
 import { createRefreshOne } from "./server/refreshOne.ts";
 import { reloadAgent } from "./server/reload.ts";
 import { createSerial } from "./server/serial.ts";
 import { createSnapshot } from "./server/snapshot.ts";
-import { OVERVIEW_SNAPSHOT_FILE, STATE_FILE, USAGE_HISTORY_FILE, loadRegistry, readRegistry, writeRegistry } from "./server/store.ts";
+import { OVERVIEW_SNAPSHOT_FILE, STATE_FILE, USAGE_HISTORY_FILE, USAGE_READINGS_FILE, loadRegistry, readRegistry, writeRegistry } from "./server/store.ts";
 import { switchAccount } from "./server/switchAccount.ts";
 import { transcriptExists, unsavedSession } from "./server/transcript.ts";
 import { listChats, switchAll } from "./server/switchAll.ts";
@@ -78,7 +79,14 @@ export default function contribute(server: PluginServerContext) {
   let freshForMs = FRESH_FOR_MS;
   // Every reading taken anyway goes into the history the forecast reads; none is taken for it.
   const history = createHistory({ path: USAGE_HISTORY_FILE });
-  const usage = createUsage({ ...liveDeps, onReading: (dir, result, measuredAt) => void history.record(dir, result, measuredAt) }, () => freshForMs);
+  const usage = createUsage(
+    {
+      ...liveDeps,
+      onReading: (dir, result, measuredAt) => void history.record(dir, result, measuredAt),
+      saved: createReadings({ path: USAGE_READINGS_FILE }),
+    },
+    () => freshForMs,
+  );
   // Who each account's own login belongs to; discovery's answer comes from a cache that chats
   // running on another account rewrite.
   const profiles = createProfiles();
