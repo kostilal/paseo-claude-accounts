@@ -154,6 +154,8 @@ const hint = z.discriminatedUnion("kind", [
     title: z.string(),
     /** The account work goes to right now, when that is another: this one's turn comes after it. */
     servedNow: z.string().nullable(),
+    /** That account's login key, so the client can name it as it names every account. */
+    servedNowKey: z.string().nullable().default(null),
     /** From when this account can take more work, until its week resets. */
     startAt: z.number(),
     untilAt: z.number(),
@@ -562,6 +564,27 @@ const reading = (bar: { utilization: number; resetsAt: string } | null): SampleW
 
 const titleOf = (row: AccountView) => (row.email !== "" ? row.email : row.name);
 
+/** The forecast with every account named by `nameOf(key)`, where it gives a name. The daemon
+ *  names accounts by address, but one address can be two accounts, and only the client knows the
+ *  app's language to say whose each is in. */
+export function retitle(forecast: Forecast, nameOf: (key: string) => string | undefined): Forecast {
+  const name = (key: string | null, title: string) => (key === null ? title : (nameOf(key) ?? title));
+  return {
+    ...forecast,
+    accounts: forecast.accounts.map((account) => ({ ...account, title: name(account.key, account.title) })),
+    excluded: forecast.excluded.map((item) => ({ ...item, title: name(item.key, item.title) })),
+    hints: forecast.hints.map((hint) =>
+      hint.kind !== "speed-up"
+        ? hint
+        : {
+            ...hint,
+            title: name(hint.key, hint.title),
+            servedNow: hint.servedNow === null ? null : name(hint.servedNowKey, hint.servedNow),
+          },
+    ),
+  };
+}
+
 function whyNot(row: AccountView): ForecastExclusion | null {
   if (row.usage === "unsupported") return "no-meter";
   // A reading that failed may still carry the last good numbers, with their own age.
@@ -682,6 +705,7 @@ function speedUpHint(
       key: row.key,
       title: titleOf(row),
       servedNow: serving === undefined || serving === account ? null : titleOf(rows[serving.index]!),
+      servedNowKey: serving === undefined || serving === account ? null : rows[serving.index]!.key,
       startAt: firstFree,
       untilAt: until,
       lostPercent: lost,

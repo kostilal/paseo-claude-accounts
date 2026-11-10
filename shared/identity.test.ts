@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loginKey, loginLabel, type Login } from "./identity.ts";
+import { loginKey, loginLabel, loginName, loginOwner, type Login } from "./identity.ts";
 
 test("the same email and orgName is the same login, from any directory", () => {
   const a = loginKey({ email: "bob@example.com", orgName: "Acme" }, "/Users/me/.claude-work");
@@ -93,4 +93,41 @@ test("loginLabel returns the caller's fallback when nothing is known, not a lite
   // A non-English fallback: this module must have no English string of its own.
   assert.equal(loginLabel(login, "вхід не виконано"), "вхід не виконано");
   assert.equal(loginLabel(login, "not logged in"), "not logged in");
+});
+
+test("loginOwner names a real organisation as it is", () => {
+  assert.equal(loginOwner({ email: "bob@example.com", orgName: "Acme LLC" }, "Личный"), "Acme LLC");
+});
+
+test("loginOwner calls the person's own org personal, in the caller's words", () => {
+  // Claude names a personal account's org after the address; Codex calls it "Personal".
+  assert.equal(loginOwner({ email: "alice@example.com", orgName: "alice@example.com's Organization" }, "Личный"), "Личный");
+  assert.equal(loginOwner({ email: "alice@example.com", orgName: "Personal" }, "Особистий"), "Особистий");
+});
+
+test("loginOwner knows the person's own org whatever the case of the address in it", () => {
+  assert.equal(loginOwner({ email: "Alice@Example.com", orgName: "alice@example.com's Organization" }, "Личный"), "Личный");
+});
+
+test("loginOwner says nothing it does not know: no org, or no login at all", () => {
+  // A blank org may be a team seat whose org was not read, so it is not guessed to be personal.
+  assert.equal(loginOwner({ email: "alice@example.com", orgName: "" }, "Личный"), "");
+  assert.equal(loginOwner({ email: "", orgName: "Acme" }, "Личный"), "");
+});
+
+test("one address under two orgs gets two names, whose start tells them apart", () => {
+  const email = "me@example.com";
+  const own = loginName({ email, orgName: `${email}'s Organization` }, "Личный", unusedFallback);
+  const work = loginName({ email, orgName: "Acme LLC" }, "Личный", unusedFallback);
+  assert.equal(own, "Личный · me@example.com");
+  assert.equal(work, "Acme LLC · me@example.com");
+});
+
+test("loginName is the address alone when the owner is unknown", () => {
+  assert.equal(loginName({ email: "alice@example.com", orgName: "" }, "Личный", unusedFallback), "alice@example.com");
+});
+
+test("loginName falls back to the org, then to the caller's fallback, when there is no address", () => {
+  assert.equal(loginName({ email: "", orgName: "Acme" }, "Личный", unusedFallback), "Acme");
+  assert.equal(loginName({ email: "", orgName: "" }, "Личный", "вхід не виконано"), "вхід не виконано");
 });

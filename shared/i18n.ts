@@ -5,6 +5,8 @@ export interface Strings {
   accounts: string;
   screenSubtitle: string;
   notLoggedIn: string;
+  /** Whose an account is when it is the person's own rather than a company seat. */
+  personalAccount: string;
   logIn: string;
   noWorkspace: string;
   loginFailed: string;
@@ -274,6 +276,7 @@ const en: Strings = {
   accounts: "Accounts",
   screenSubtitle: "Your accounts and their limits. A chat's account is changed in the pill above it.",
   notLoggedIn: "Not logged in",
+  personalAccount: "Personal",
   logIn: "Log in",
   noWorkspace: "Open a workspace first: a terminal needs one to live in",
   loginFailed: "Could not start the login.",
@@ -510,6 +513,7 @@ const ru: Strings = {
   accounts: "Аккаунты",
   screenSubtitle: "Твои аккаунты и их лимиты. Аккаунт чата меняется в пилюле над ним.",
   notLoggedIn: "Не выполнен вход",
+  personalAccount: "Личный",
   logIn: "Войти",
   noWorkspace: "Сначала открой воркспейс: терминалу нужно в чём-то жить",
   loginFailed: "Не удалось запустить вход.",
@@ -746,6 +750,7 @@ const uk: Strings = {
   accounts: "Акаунти",
   screenSubtitle: "Твої акаунти та їхні ліміти. Акаунт чату змінюється в пілюлі над ним.",
   notLoggedIn: "Вхід не виконано",
+  personalAccount: "Особистий",
   logIn: "Увійти",
   noWorkspace: "Спочатку відкрий воркспейс: терміналу потрібно десь жити",
   loginFailed: "Не вдалося запустити вхід.",

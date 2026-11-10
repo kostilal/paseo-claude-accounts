@@ -88,11 +88,13 @@ export const pillAccount = z.object({
   home: z.string().default(""),
   /** The login key from shared/identity.ts; the row's identity. */
   key: z.string(),
-  /** The parts a row is titled by, joined with `loginLabel`. */
+  /** The parts a row is titled by, joined with `loginName`. */
   email: z.string().default(""),
   orgName: z.string().default(""),
   /** `Identity.subscriptionType`. */
   plan: z.string().default(""),
+  /** `Identity.rateLimitTier`, which says a Max plan's multiple; "" when the profile did not say. */
+  tier: z.string().default(""),
   /** Every registry account whose directory holds this login, sorted. */
   accountIds: z.array(z.string()).default([]),
   /** The account id a press switches to. Empty exactly when `loggedIn` is false. */

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loginLabel } from "../shared/identity.ts";
+import { loginName } from "../shared/identity.ts";
 import { claudeNotFound } from "./discover.ts";
 import { type Account, type Registry, emptyRegistry } from "../shared/registry.ts";
 import { type PillDeps, pillStateFor } from "./pill.ts";
@@ -144,6 +144,18 @@ test("a second login, with one directory, stays its own row", async () => {
   assert.equal(teamRow?.plan, "team");
 });
 
+test("a row carries its login's rate-limit tier, which names a Max plan's multiple", async () => {
+  const state = await pillStateFor(input, groupedDeps({
+    identify: async (dir) => {
+      if (dir === dflt.home) return loggedOutIdentity;
+      if (dir === team.home) return teamIdentity;
+      return { ...maxIdentity, rateLimitTier: "default_claude_max_20x" };
+    },
+  }));
+  assert.equal(state.accounts.find((row) => row.email === "alice@example.com")?.tier, "default_claude_max_20x");
+  assert.equal(state.accounts.find((row) => row.email === "bob@example.com")?.tier, "");
+});
+
 test("a logged-out directory keeps its own row, with switchTo empty", async () => {
   const state = await pillStateFor(input, groupedDeps());
   const loggedOutRow = state.accounts.find((row) => row.accountIds.includes("default"));
@@ -158,14 +170,14 @@ test("the pill offers exactly three rows for six directories on two logins plus 
 });
 
 test("every row carries what it takes to be named by its login rather than by a folder", () => {
-  // The client names rows through loginLabel, falling back to `label` when no login is known.
+  // The client names rows through loginName, falling back to `label` when no login is known.
   return pillStateFor(input, groupedDeps()).then((state) => {
-    const named = state.accounts.map((row) => loginLabel(row, row.label));
+    const named = state.accounts.map((row) => loginName(row, "Personal", row.label));
     assert.deepEqual(named, [
       // No login to name the logged-out directory by, so its folder name is used.
       "default",
-      "bob@example.com · Acme · team",
-      "alice@example.com · max",
+      "Acme · bob@example.com",
+      "alice@example.com",
     ]);
     assert.equal(named.includes("Site"), false);
     assert.equal(named.includes("Team"), false);

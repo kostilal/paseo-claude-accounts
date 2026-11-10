@@ -119,6 +119,7 @@ export async function pillStateFor(input: PillInput, deps: PillDeps): Promise<Pi
         email: group.email,
         orgName: group.orgName,
         plan: group.plan,
+        tier: group.rateLimitTier,
         accountIds: group.accountIds,
         switchTo: group.switchTo,
         loggedIn: group.loggedIn,

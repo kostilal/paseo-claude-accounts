@@ -10,23 +10,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { fetchUsage, refreshAccountRpc } from "../shared/accounts.ts";
-import { loginLabel } from "../shared/identity.ts";
+import { loginName, loginOwner } from "../shared/identity.ts";
 import { type Strings, t } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { nearlyFull } from "../shared/auto.ts";
 import { type PillAccount, type SwitchCode, claudeProvidersRpc, pillStateRpc, switchAccountRpc } from "../shared/switch.ts";
-import { currentOf, exhaustedResetIn, hasSpare, pillFigure, pillPercent, refreshNotice, rowAgeText, tightestOf, usageLine, weekLine } from "./format.ts";
+import { currentOf, exhaustedResetIn, hasSpare, pillFigure, pillLabel, pillPercent, pillTag, planName, refreshNotice, rowAgeText, tightestOf, usageLine, weekLine } from "./format.ts";
 import { createPillRegistry, trackClaudeAgents } from "./pill-registry.ts";
 import { AccountRing } from "./ring.tsx";
 import { typeScale } from "./typography.ts";
 import { Banner, Button, EmptyState, RefreshDot, Skeleton, meterTone } from "./ui.tsx";
 
-/** A row is named by its login, not by the config directory holding it. */
+/** A row is named by its login, whose it is first, not by the config directory holding it. */
 export function loginTitle(account: PillAccount, strings: Strings): string {
-  return loginLabel(
-    { email: account.email, orgName: account.orgName, plan: "" },
-    account.label !== "" ? account.label : strings.notLoggedIn,
-  );
+  return loginName(account, strings.personalAccount, account.label !== "" ? account.label : strings.notLoggedIn);
 }
 
 function messageFor(code: SwitchCode, strings: Strings): string {
@@ -119,11 +116,11 @@ function AccountPillIcon(
   });
 
   const current = data === undefined ? null : currentOf(data);
-  // The host rejects an empty label (it throws inside addComposerPill), so use a placeholder.
   // The wait is counted from the last poll: reading `dataUpdatedAt` renders the pill again on
   // every poll, while `data` alone changes only when the numbers do, and the wait would stand still.
   const figure = current === null ? strings.pillNoAccount : pillFigure(current, dataUpdatedAt, strings);
-  const label = figure === "" ? strings.pillUnread : figure;
+  // Named only when another account has the same address, or the figure would not say which.
+  const label = pillLabel(data === undefined ? "" : pillTag(data, strings), figure, strings);
   useEffect(() => {
     registration.current?.update({ label, visible: showPill });
   }, [label, showPill, registration]);
@@ -292,6 +289,11 @@ export function AccountPopover(props: PluginButtonContentProps) {
               {ordered.map((account) => {
                 const tightest = tightestOf(account.fiveHour, account.sevenDay);
                 const title = loginTitle(account, strings);
+                // One address can be the person's own plan and a company seat: the row leads
+                // with whose it is, and the plan and the address go underneath.
+                const owner = loginOwner(account, strings.personalAccount);
+                const plan = planName(account.plan, account.tier);
+                const subtitle = [plan, owner !== "" ? account.email : ""].filter((part) => part !== "").join(" · ");
                 const pressable = !account.current;
                 const refreshes = account.usage !== "unsupported" && account.switchTo !== "";
                 const tone =
@@ -301,7 +303,7 @@ export function AccountPopover(props: PluginButtonContentProps) {
                     <View>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={title}
+                      accessibilityLabel={plan !== "" ? `${title} · ${plan}` : title}
                       accessibilityState={{ selected: account.current, disabled: !pressable }}
                       disabled={!pressable}
                       hitSlop={2}
@@ -326,8 +328,13 @@ export function AccountPopover(props: PluginButtonContentProps) {
                       <View style={{ flex: 1, gap: 2 }}>
                         {/* Clear of the corner, which holds the time and the round button. */}
                         <Text style={{ ...typeScale.body, fontWeight: "600", color: theme.colors.foreground, paddingRight: refreshes ? 96 : 0 }} numberOfLines={1}>
-                          {title}
+                          {owner !== "" ? owner : title}
                         </Text>
+                        {subtitle !== "" && (
+                          <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
+                            {subtitle}
+                          </Text>
+                        )}
                         <Text style={{ ...typeScale.meta, color: tone }} numberOfLines={1}>
                           {usageLine(account, now, strings)}
                         </Text>
