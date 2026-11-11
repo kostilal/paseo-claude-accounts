@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { t } from "../shared/i18n.ts";
 import type { PillAccount, PillState } from "../shared/switch.ts";
-import { exhaustedResetIn, formatWait, hasSpare, pillFigure, pillLabel, pillPercent, pillTag, planName, refreshNotice, rowAgeText, savedAtText, shortLogins, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
+import { exhaustedResetIn, formatReset, formatWait, hasSpare, pillFigure, pillLabel, pillPercent, pillTag, planName, refreshNotice, rowAgeText, savedAtText, shortLogins, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
 
 const strings = t("ru");
 const now = Date.parse("2026-09-16T12:00:00Z");
@@ -364,4 +364,19 @@ test("the pill's label puts the figure first, where the host's cut cannot reach 
   assert.equal(pillLabel("Acme", "2ч 23%", strings), "2ч 23% · Acme");
   assert.equal(pillLabel("", "", strings), strings.pillUnread);
   assert.equal(pillLabel("Acme", "", strings), `${strings.pillUnread} · Acme`);
+});
+
+test("formatReset counts days and hours from a day on", () => {
+  const hour = 3_600_000;
+  assert.equal(formatReset(47 * 60_000, strings), "47 мин");
+  assert.equal(formatReset(5 * hour, strings), "5 ч");
+  assert.equal(formatReset(23 * hour + 29 * 60_000, strings), "23 ч");
+  assert.equal(formatReset(23 * hour + 40 * 60_000, strings), "1 д");
+  assert.equal(formatReset(24 * hour, strings), "1 д");
+  assert.equal(formatReset(36 * hour, strings), "1 д 12 ч");
+  assert.equal(formatReset(77 * hour, strings), "3 д 5 ч");
+  assert.equal(formatReset(71 * hour + 40 * 60_000, strings), "3 д");
+  assert.equal(formatReset(86 * hour + 20 * 60_000, strings), "3 д 14 ч");
+  assert.equal(formatReset(47 * hour + 50 * 60_000, strings), "2 д");
+  assert.equal(formatReset(77 * hour, t("en")), "3 d 5 h");
 });

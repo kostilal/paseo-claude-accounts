@@ -21,7 +21,7 @@ import { setDefaultRpc } from "../shared/defaults.ts";
 import { type Strings, usageErrorText } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { PROVIDERS, type ProviderId, providerForHome } from "../shared/providers.ts";
-import { formatWait, planName, providerName, savedAtText, tightestOf } from "./format.ts";
+import { formatReset, formatWait, planName, providerName, savedAtText, tightestOf } from "./format.ts";
 import { ForecastCard } from "./forecast.tsx";
 import { revealNotice } from "./reveal-notice.ts";
 import { AccountRing } from "./ring.tsx";
@@ -214,7 +214,7 @@ function LoginCard({
 
   const resetSuffix = (bar: { resetsAt: string } | null) =>
     bar !== null && Number.isFinite(Date.parse(bar.resetsAt))
-      ? ` · ${strings.resetIn} ${formatWait(Math.max(0, Date.parse(bar.resetsAt) - now), strings)}`
+      ? ` · ${strings.resetIn} ${formatReset(Math.max(0, Date.parse(bar.resetsAt) - now), strings)}`
       : "";
 
   return (

@@ -48,6 +48,15 @@ export function formatWait(ms: number, strings: Strings): string {
   return `${count} ${unit}`;
 }
 
+/** When a card's window resets: days and hours from a day on ("3 д 5 ч", "1 д 12 ч", "3 д"),
+ *  as `formatWait` below that ("5 ч", "47 мин"). Hours are rounded, so 23 h 40 min reads "1 д". */
+export function formatReset(ms: number, strings: Strings): string {
+  const hours = Math.round(Math.max(1, Math.ceil(ms / 60_000)) / 60);
+  if (hours < 24) return formatWait(ms, strings);
+  const days = `${Math.floor(hours / 24)} ${strings.unitDay}`;
+  return hours % 24 === 0 ? days : `${days} ${hours % 24} ${strings.unitHour}`;
+}
+
 /** A wait on the pill, which has room for one short figure: "47мин", "5ч", "3д". */
 function shortWait(ms: number, strings: Strings): string {
   const [count, unit] = waitParts(ms, 24, strings);
