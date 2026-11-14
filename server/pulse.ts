@@ -15,12 +15,14 @@ import type { UsageResult } from "./usage.ts";
  * `accounts.pulse-events` hands over what happened since a cursor (server/pulse-events.ts).
  *
  * The readings are only what the plugin already holds: the logins as the Accounts screen last
- * saw them (server/snapshot.ts) with the usage cache laid over them (server/usage.ts). Nothing
- * here measures, asks Anthropic or starts a process, so polling it costs nothing; a login whose
- * numbers have not been measured lately reads as stale, not as refreshed. Pulse offers no
+ * saw them (server/snapshot.ts) with the usage cache laid over them (server/usage.ts). The answer
+ * itself measures nothing and never waits: a read of the snapshot only nudges the auto-refresh
+ * (server/pulseRefresh.ts), which measures in the background at the user's own interval, at most
+ * once per interval for each login, and the next read carries what it found. A login whose numbers
+ * have not been measured lately reads as stale, not as refreshed. Pulse offers no
  * actions: switching a chat's account restarts the chat and needs a chat to say which, which a
  * widget or a notification cannot give. Emails never leave the plugin: a login is an opaque id
- * and "Account N", with its plan beside it.
+ * and "Account N" (localized: "Аккаунт N", "Акаунт N"), with its plan beside it.
  *
  * The "Show in Pulse" switch in the plugin's settings takes the readings out and silences the
  * events; the handlers themselves never refuse, since they cannot tell Pulse from anybody else.
@@ -233,6 +235,9 @@ export interface LoginSources {
   info(home: string): UsageInfo | null;
 }
 
+/** The rows of the overview that are Pulse logins. */
+export const shownInPulse = (row: AccountView): boolean => row.registered && row.provider === "claude" && row.loggedIn;
+
 /**
  * The logins of the last overview, with each one's numbers taken from the usage cache where it
  * holds a real reading (the overview is only as new as the last time the Accounts screen was
@@ -242,7 +247,7 @@ export interface LoginSources {
 export function pulseLoginsOf(rows: readonly AccountView[], sources: LoginSources): PulseLogin[] {
   const homeOf = (id: string) => accountById(sources.registry, id)?.home ?? null;
   return rows
-    .filter((row) => row.registered && row.provider === "claude" && row.loggedIn)
+    .filter(shownInPulse)
     .map((row) => {
       let usage = row.usage;
       let fiveHour = row.fiveHour;
@@ -367,6 +372,8 @@ export interface PulseDeps {
   ring: EventRing;
   /** The logins as they are now, from what the plugin holds. */
   logins(): Promise<PulseLogin[]>;
+  /** Told of each read of the snapshot while the accounts are shown; not waited for. */
+  refresh?(): unknown;
   now?: () => number;
   /** How long the manifest and the snapshot wait for the first read of the settings. */
   settleMs?: number;
@@ -444,6 +451,15 @@ export function createPulse(deps: PulseDeps): Pulse {
     async snapshot({ ifRev }) {
       await settled;
       const manifest = manifestFor(shown);
+      if (shown) {
+        // A nudge, never awaited; nothing it throws or rejects reaches the snapshot.
+        try {
+          const kicked = deps.refresh?.();
+          if (kicked instanceof Promise) kicked.catch(() => {});
+        } catch {
+          // The readings below stand.
+        }
+      }
       const at = now();
       const logins = shown ? await read() : [];
       if (shown && logins !== null) observe(logins);
@@ -455,7 +471,7 @@ export function createPulse(deps: PulseDeps): Pulse {
             : pulseValues(logins, at);
       const entities =
         shown && logins !== null
-          ? { login: logins.map((login, index) => ({ id: login.id, title: `Account ${index + 1}`, ...(login.plan === "" ? {} : { subtitle: login.plan }) })) }
+          ? { login: logins.map((login, index) => ({ id: login.id, title: t(`Account ${index + 1}`, `Аккаунт ${index + 1}`, `Акаунт ${index + 1}`), ...(login.plan === "" ? {} : { subtitle: login.plan }) })) }
           : undefined;
       const body = { schema: PULSE_SCHEMA as typeof PULSE_SCHEMA, manifestRev: manifest.manifestRev, events: { head: deps.ring.head() }, entities, values };
       const rev = pulseRev(body);

@@ -60,6 +60,7 @@ import { pillStateFor } from "./server/pill.ts";
 import { createProfiles, ownLogin } from "./server/profile.ts";
 import { createEventRing } from "./server/pulse-events.ts";
 import { createPulse, pulseEventsRpc, pulseLoginsOf, pulseManifestRpc, pulseSnapshotRpc } from "./server/pulse.ts";
+import { createPulseRefresh } from "./server/pulseRefresh.ts";
 import { type CliProvider, createSessionDirs } from "./server/sessionDir.ts";
 import { createSessionLedger } from "./server/sessionLedger.ts";
 import { createProjects } from "./server/projects.ts";
@@ -192,10 +193,19 @@ export default function contribute(server: PluginServerContext) {
   }
 
   // Paseo Pulse (server/pulse.ts): the logins of the last overview with the usage cache laid
-  // over them. Reads only; nothing is measured for it.
+  // over them. A read answers from those and nudges the auto-refresh (server/pulseRefresh.ts),
+  // so the numbers stay fresh at the user's interval while no Paseo window polls them.
+  const pulseRefresh = createPulseRefresh({
+    rows: async () => ({ rows: (await snapshot.read()).overview?.accounts ?? [], registry: await readRegistry() }),
+    usage,
+    defaultDir,
+    intervalMs: () => freshForMs,
+    log,
+  });
   const pulse = createPulse({
     ring: createEventRing(),
     logins: async () => pulseLoginsOf((await snapshot.read()).overview?.accounts ?? [], { registry: await readRegistry(), cached: usage.cached, info: usage.info }),
+    refresh: () => pulseRefresh.kick(),
   });
 
   void prefs().then((values) => {

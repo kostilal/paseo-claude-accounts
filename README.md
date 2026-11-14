@@ -238,8 +238,11 @@ it with three RPCs (`server/pulse.ts`, contract `paseo.pulse/1`):
   The meters turn warning at 80 % and critical at 95 %. There are no actions: switching a chat's
   account restarts the chat and needs the chat named, which a widget or a notification cannot do.
 - `accounts.pulse`, the readings: only what the plugin already holds, the logins as the Accounts screen
-  last saw them with the usage cache laid over them. It measures nothing and asks Anthropic nothing,
-  so Pulse polling it costs nothing; a login whose numbers are old reads as stale. Before the Accounts
+  last saw them with the usage cache laid over them. The answer never waits for Anthropic. While Pulse
+  reads it, the usage of the logins Pulse shows is refreshed in the background the way the Accounts
+  screen refreshes it: at the auto-refresh interval, at most once per interval for each login, never
+  during a rate-limit wait, and never for a login that has not been read once before (so it brings up
+  no Keychain prompt of its own). A login whose numbers are old reads as stale. Before the Accounts
   screen has been opened once there are no logins to show. A login is an opaque id shown as
   **Account 1**, **Account 2**, with its plan beside it: no email leaves the plugin.
 - `accounts.pulse-events`, by cursor: a window that goes over 80 % (`five_hour_warning`,

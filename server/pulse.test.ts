@@ -328,8 +328,8 @@ test("the snapshot: entities are Account N with the plan, values are keyed by lo
   assert.deepEqual(snapshot.events, { head: "" });
   assert.deepEqual(snapshot.entities, {
     login: [
-      { id: loginId("a"), title: "Account 1", subtitle: "Max 20x" },
-      { id: loginId("b"), title: "Account 2", subtitle: "Max 20x" },
+      { id: loginId("a"), title: { en: "Account 1", ru: "Аккаунт 1", uk: "Акаунт 1" }, subtitle: "Max 20x" },
+      { id: loginId("b"), title: { en: "Account 2", ru: "Аккаунт 2", uk: "Акаунт 2" }, subtitle: "Max 20x" },
     ],
   });
   assert.ok(!JSON.stringify(snapshot).includes("@"));
