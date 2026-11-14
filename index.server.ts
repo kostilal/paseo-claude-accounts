@@ -58,6 +58,9 @@ import { readMoveCheck } from "./server/moveCheck.ts";
 import { createOverview, createUsageRow } from "./server/overview.ts";
 import { pillStateFor } from "./server/pill.ts";
 import { createProfiles, ownLogin } from "./server/profile.ts";
+import { createEventRing } from "./server/pulse-events.ts";
+import { createPulse, pulseEventsRpc, pulseLoginsOf, pulseManifestRpc, pulseSnapshotRpc } from "./server/pulse.ts";
+import { createPulseRefresh } from "./server/pulseRefresh.ts";
 import { type CliProvider, createSessionDirs } from "./server/sessionDir.ts";
 import { createSessionLedger } from "./server/sessionLedger.ts";
 import { createProjects } from "./server/projects.ts";
@@ -189,11 +192,30 @@ export default function contribute(server: PluginServerContext) {
     return state !== null && state.status === "ready" ? state.values : defaultPreferences;
   }
 
+  // Paseo Pulse (server/pulse.ts): the logins of the last overview with the usage cache laid
+  // over them. A read answers from those and nudges the auto-refresh (server/pulseRefresh.ts),
+  // so the numbers stay fresh at the user's interval while no Paseo window polls them.
+  const pulseRefresh = createPulseRefresh({
+    rows: async () => ({ rows: (await snapshot.read()).overview?.accounts ?? [], registry: await readRegistry() }),
+    usage,
+    defaultDir,
+    intervalMs: () => freshForMs,
+    log,
+  });
+  const pulse = createPulse({
+    ring: createEventRing(),
+    logins: async () => pulseLoginsOf((await snapshot.read()).overview?.accounts ?? [], { registry: await readRegistry(), cached: usage.cached, info: usage.info }),
+    refresh: () => pulseRefresh.kick(),
+  });
+
   void prefs().then((values) => {
     freshForMs = values.refreshMinutes * MINUTE_MS;
+    pulse.setShown(values.pulse);
   });
   const stopFollowingSettings = settings.subscribe((state) => {
-    if (state.status === "ready") freshForMs = state.values.refreshMinutes * MINUTE_MS;
+    if (state.status !== "ready") return;
+    freshForMs = state.values.refreshMinutes * MINUTE_MS;
+    pulse.setShown(state.values.pulse);
   });
 
   /** The language the daemon writes messages in: the plugin's setting, else the daemon's. */
@@ -328,6 +350,11 @@ export default function contribute(server: PluginServerContext) {
   });
 
   server.handle(snapshotRpc, () => snapshot.read());
+
+  // For Paseo Pulse: what the accounts show there, the readings, and what happened since a cursor.
+  server.handle(pulseManifestRpc, () => pulse.manifest());
+  server.handle(pulseSnapshotRpc, (input) => pulse.snapshot(input));
+  server.handle(pulseEventsRpc, (input) => pulse.events(input));
 
   server.handle(refreshAccountRpc, (input) => refreshOne(input.account));
 

@@ -24,6 +24,10 @@ export const preferences = defineSettings({
     forecastUnchecked: z.array(z.string()).default([]),
     /** Sizes set by hand in the forecast, by login key, in multiples of a Pro plan. */
     forecastCapacity: z.record(z.string(), z.number().positive()).default({}),
+    /** Whether Paseo Pulse may show the logins' usage and send notices about them: off, it gets
+     *  no readings and no events (server/pulse.ts). A new key, so the host fills in its default
+     *  for everybody. */
+    pulse: z.boolean().default(true),
   }),
 });
 
@@ -37,4 +41,5 @@ export const defaultPreferences: Preferences = {
   refreshMinutes: 10,
   forecastUnchecked: [],
   forecastCapacity: {},
+  pulse: true,
 };

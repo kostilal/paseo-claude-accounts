@@ -113,6 +113,13 @@ export function AccountsSettings({ theme }: PluginSurfaceProps) {
             disabled={busy}
             onValueChange={(showPill) => save({ showPill })}
           />
+          <SettingsSwitch
+            label={strings.settingsPulse}
+            hint={strings.settingsPulseHint}
+            value={values.pulse}
+            disabled={busy}
+            onValueChange={(pulse) => save({ pulse })}
+          />
           <SettingsSelect
             label={strings.defaultSetting}
             hint={strings.defaultSettingHint}
