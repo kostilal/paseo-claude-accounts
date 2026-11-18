@@ -564,6 +564,18 @@ const reading = (bar: { utilization: number; resetsAt: string } | null): SampleW
 
 const titleOf = (row: AccountView) => (row.email !== "" ? row.email : row.name);
 
+const barOf = (window: SampleWindow | null) =>
+  window === null ? null : { utilization: window.used, resetsAt: window.resetsAt === null ? "" : new Date(window.resetsAt).toISOString() };
+
+/** The row with its numbers from the latest reading in its history, when that is newer than the
+ *  ones it carries. The saved overview is written only while the Accounts screen is open, but
+ *  every reading lands in the history, whoever asked for it: the pill, a refresh, Pulse. */
+export function withLatestReading(row: AccountView, samples: readonly Sample[]): AccountView {
+  const latest = samples.at(-1);
+  if (latest === undefined || (row.usageAt !== null && latest.t <= row.usageAt)) return row;
+  return { ...row, fiveHour: barOf(latest.five), sevenDay: barOf(latest.week), usageAt: latest.t };
+}
+
 /** The forecast with every account named by `nameOf(key)`, where it gives a name. The daemon
  *  names accounts by address, but one address can be two accounts, and only the client knows the
  *  app's language to say whose each is in. */

@@ -24,6 +24,11 @@ composer: the session restarts on that account and the conversation carries on.
   when and by how much to slow down if an idle spell is coming, and which account to use first when
   its week would otherwise be lost at the reset. Reserve is a share of the ticked accounts' combined
   weekly capacity, never tokens: the provider reports percentages and reset times only.
+- **Forecast in the sidebar.** The Accounts row in the sidebar carries the forecast's verdict as a
+  small capsule: green "Push 23%" when that much of a week would be lost at its reset, red
+  "Ease off −15%" when work would stop for want of room, amber "Empty 2h" while no account has any,
+  green "On pace" when nothing is lost. It follows every new reading, the pill's included, without
+  asking the usage service anything more.
 - **Per chat.** A switch moves one chat. Other chats, even in the same project, stay where they are.
 - **All chats at once.** "Move all chats here" on an account, pressed twice, moves every chat in
   every workspace onto it and makes it the default: chats opened later start on it too. Idle chats restart on it now, closed ones when they next open; a chat in the middle of

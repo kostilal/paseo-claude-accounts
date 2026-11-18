@@ -4,14 +4,21 @@ import { detectAppLocale, rememberHostLanguage, useStrings } from "./client/loca
 import { contributeClient } from "./client/pill.tsx";
 import { AccountsSurface } from "./client/screen.tsx";
 import { AccountsSettings } from "./client/settings.tsx";
+import { ForecastSignal } from "./client/sidebar.tsx";
 import { contributeWorkspaceButtons } from "./client/workspace.tsx";
 import { accountSearchRpc } from "./shared/attach.ts";
 import { t } from "./shared/i18n.ts";
 
-function AccountsSidebarItem({ currentScreen, openScreen }: PluginSidebarItemProps) {
+function AccountsSidebarItem({ theme, currentScreen, openScreen }: PluginSidebarItemProps) {
   const strings = useStrings();
   return (
-    <SidebarRow icon="Users" label={strings.sidebarTitle} active={currentScreen?.screenId === "main"} onPress={() => openScreen({ screenId: "main" })} />
+    <SidebarRow
+      icon="Users"
+      label={strings.sidebarTitle}
+      active={currentScreen?.screenId === "main"}
+      onPress={() => openScreen({ screenId: "main" })}
+      trailing={<ForecastSignal theme={theme} />}
+    />
   );
 }
 

@@ -219,6 +219,15 @@ export interface Strings {
   forecastIdleNowBody: string;
   forecastOnTrackTitle: string;
   forecastOnTrackBody: string;
+  /** The forecast in the sidebar row: one short word on a capsule, then a figure. Short: the
+   *  row's title stands to its left. */
+  sidebarPush: string;
+  sidebarEaseOff: string;
+  sidebarEmpty: string;
+  sidebarOnPace: string;
+  sidebarPushLabel: string;
+  sidebarEaseOffLabel: string;
+  sidebarEmptyLabel: string;
   forecastTooLittle: string;
   forecastIdleHeading: string;
   forecastNoIdle: string;
@@ -456,6 +465,13 @@ const en: Strings = {
   forecastIdleNowBody: "No ticked account can take work until {until}.",
   forecastOnTrackTitle: "On track",
   forecastOnTrackBody: "At this pace no idle time is forecast and nothing worth using is lost at a reset.",
+  sidebarPush: "Push",
+  sidebarEaseOff: "Ease off",
+  sidebarEmpty: "Empty",
+  sidebarOnPace: "On pace",
+  sidebarPushLabel: "You can speed up: {lost} of {account}'s week is lost at its reset",
+  sidebarEaseOffLabel: "Slow down by {cut}, or work stops for {idle}",
+  sidebarEmptyLabel: "Every account is spent; room again in {wait}",
   forecastTooLittle: "Too little to go on for a pace yet. The chart shows the reserve as it stands.",
   forecastIdleHeading: "Expected idle",
   forecastNoIdle: "None expected.",
@@ -693,6 +709,13 @@ const ru: Strings = {
   forecastIdleNowBody: "Ни один отмеченный аккаунт не примет работу до {until}.",
   forecastOnTrackTitle: "Идёшь ровно",
   forecastOnTrackBody: "В таком темпе простоя не ожидается, и на сбросах ничего заметного не сгорит.",
+  sidebarPush: "Жми",
+  sidebarEaseOff: "Тормози",
+  sidebarEmpty: "Пусто",
+  sidebarOnPace: "Ровно",
+  sidebarPushLabel: "Можно прибавить: у {account} на сбросе сгорит {lost} недели",
+  sidebarEaseOffLabel: "Притормози на {cut}, иначе простой {idle}",
+  sidebarEmptyLabel: "Всё выжжено, место появится через {wait}",
   forecastTooLittle: "Пока не из чего вывести темп. График показывает запас как он есть.",
   forecastIdleHeading: "Ожидаемый простой",
   forecastNoIdle: "Не ожидается.",
@@ -930,6 +953,13 @@ const uk: Strings = {
   forecastIdleNowBody: "Жоден позначений акаунт не прийме роботу до {until}.",
   forecastOnTrackTitle: "Йдеш рівно",
   forecastOnTrackBody: "У такому темпі простою не очікується, і на скиданнях нічого помітного не згорить.",
+  sidebarPush: "Тисни",
+  sidebarEaseOff: "Гальмуй",
+  sidebarEmpty: "Порожньо",
+  sidebarOnPace: "Рівно",
+  sidebarPushLabel: "Можна додати: у {account} на скиданні згорить {lost} тижня",
+  sidebarEaseOffLabel: "Пригальмуй на {cut}, інакше простій {idle}",
+  sidebarEmptyLabel: "Усе випалено, місце з'явиться через {wait}",
   forecastTooLittle: "Поки немає з чого вивести темп. Графік показує запас як він є.",
   forecastIdleHeading: "Очікуваний простій",
   forecastNoIdle: "Не очікується.",

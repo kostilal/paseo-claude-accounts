@@ -191,6 +191,8 @@ export function AccountPopover(props: PluginButtonContentProps) {
   const showFreshNumbers = () => {
     void queries.invalidateQueries({ queryKey: ["accounts", "pill"] });
     void queries.invalidateQueries({ queryKey: ["accounts", "overview"] });
+    // The forecast reads the latest readings too: the sidebar's and the screen's.
+    void queries.invalidateQueries({ queryKey: ["accounts", "forecast"] });
   };
 
   // Each round button answers for its own row, and several accounts may refresh at once.

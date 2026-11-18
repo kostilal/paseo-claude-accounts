@@ -4,6 +4,7 @@ import { mkdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  type AccountView,
   connectAccount,
   fetchUsage,
   listAccounts,
@@ -34,7 +35,7 @@ import {
   workspaceAccount,
 } from "./shared/registry.ts";
 import { defaultPreferences, preferences } from "./shared/settings.ts";
-import { computeForecast, forecastRpc } from "./shared/forecast.ts";
+import { computeForecast, forecastRpc, withLatestReading } from "./shared/forecast.ts";
 import { claudeProvidersRpc, pillStateRpc, switchAccountRpc, switchAllRpc } from "./shared/switch.ts";
 import { workspaceStateRpc } from "./shared/workspace.ts";
 import { ACCOUNT_RESOURCE, accountSearchRpc } from "./shared/attach.ts";
@@ -331,7 +332,8 @@ export default function contribute(server: PluginServerContext) {
 
   server.handle(refreshAccountRpc, (input) => refreshOne(input.account));
 
-  // From the numbers the screen last showed: the forecast asks the usage endpoint nothing itself.
+  // From the accounts the screen last showed, each with its newest reading in the history: the
+  // forecast asks the usage endpoint nothing itself.
   server.handle(forecastRpc, async (input) => {
     const [saved, registry] = await Promise.all([snapshot.read(), readRegistry()]);
     const rows = saved.overview?.accounts ?? [];
@@ -343,7 +345,8 @@ export default function contribute(server: PluginServerContext) {
         }),
       ),
     );
-    return computeForecast({ ...input, rows, samples: (row) => readings.get(row.key) ?? [], now: Date.now() });
+    const samplesOf = (row: AccountView) => readings.get(row.key) ?? [];
+    return computeForecast({ ...input, rows: rows.map((row) => withLatestReading(row, samplesOf(row))), samples: samplesOf, now: Date.now() });
   });
 
   server.handle(fetchUsage, async (input, { paseo }) => {

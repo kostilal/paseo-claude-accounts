@@ -58,7 +58,7 @@ export function formatReset(ms: number, strings: Strings): string {
 }
 
 /** A wait on the pill, which has room for one short figure: "47мин", "5ч", "3д". */
-function shortWait(ms: number, strings: Strings): string {
+export function shortWait(ms: number, strings: Strings): string {
   const [count, unit] = waitParts(ms, 24, strings);
   return `${count}${unit}`;
 }

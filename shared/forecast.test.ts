@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AccountView } from "./accounts.ts";
-import { type Forecast, type ForecastHint, type Sample, computeForecast, fiveHourShare, forecast, onTrack, paceOf, planMultiple, retitle } from "./forecast.ts";
+import { type Forecast, type ForecastHint, type Sample, computeForecast, fiveHourShare, forecast, onTrack, paceOf, planMultiple, retitle, withLatestReading } from "./forecast.ts";
 
 const HOUR = 3_600_000;
 const NOW = Date.UTC(2026, 10, 8, 12);
@@ -632,4 +632,27 @@ test("the client can rename every account the forecast names, and keeps a name i
   const left = run([row("week-less", { fiveHour: { utilization: 10, resetsAt: iso(h(2)) }, sevenDay: null })], {});
   const out = retitle(left, (key) => (key === "week-less" ? "Acme · week-less@example.com" : undefined));
   assert.deepEqual(out.excluded.map((item) => item.title), ["Acme · week-less@example.com"]);
+});
+
+test("a reading in the history newer than the saved overview gives the row its numbers", () => {
+  const saved = row("a", { sevenDay: { utilization: 40, resetsAt: iso(h(72)) }, usageAt: h(-3) });
+  const samples: Sample[] = [
+    { t: h(-4), five: null, week: { used: 38, resetsAt: h(72) } },
+    { t: h(-1), five: { used: 12, resetsAt: h(2) }, week: { used: 55, resetsAt: h(72) } },
+  ];
+  const fresh = withLatestReading(saved, samples);
+  assert.equal(fresh.usageAt, h(-1));
+  assert.deepEqual(fresh.sevenDay, { utilization: 55, resetsAt: iso(h(72)) });
+  assert.deepEqual(fresh.fiveHour, { utilization: 12, resetsAt: iso(h(2)) });
+});
+
+test("the saved overview stands when the history holds nothing newer", () => {
+  const saved = row("a", { sevenDay: { utilization: 40, resetsAt: iso(h(72)) }, usageAt: h(-1) });
+  assert.equal(withLatestReading(saved, [{ t: h(-1), five: null, week: { used: 30, resetsAt: h(72) } }]), saved);
+  assert.equal(withLatestReading(saved, []), saved);
+});
+
+test("a window with no reset time keeps none", () => {
+  const fresh = withLatestReading(row("a", { usageAt: null }), [{ t: h(-1), five: null, week: { used: 10, resetsAt: null } }]);
+  assert.deepEqual(fresh.sevenDay, { utilization: 10, resetsAt: "" });
 });
