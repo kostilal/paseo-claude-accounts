@@ -52,6 +52,10 @@ export interface UsageDeps {
     save(dir: string, entry: Entry): unknown;
   };
   log?(line: string): void;
+  /** What else is known of `dir`'s login, laid over every reading handed out, cached or new:
+   *  the endpoint no longer reports every window (see server/quotaHits.ts). Readings saved and
+   *  told to `onReading` stay the endpoint's own. */
+  overlay?(dir: string, result: UsageResult): UsageResult;
 }
 
 /** A 429 may name a wait, or say 0 or nothing; the last good reading is kept through it, and
@@ -280,10 +284,15 @@ export function createUsage(deps: UsageDeps = liveDeps, freshForMs: () => number
     return result;
   }
 
+  const over = (dir: string, result: UsageResult) => (deps.overlay === undefined ? result : deps.overlay(dir, result));
+
   return {
-    measure,
+    measure: async (dir: string, defaultDir: string, manual: boolean) => over(dir, await measure(dir, defaultDir, manual)),
     authorised: (dir: string) => authorisedDirs.has(dir),
-    cached: (dir: string) => cache.get(dir)?.result ?? null,
+    cached: (dir: string) => {
+      const result = cache.get(dir)?.result;
+      return result === undefined ? null : over(dir, result);
+    },
     /** When the cached numbers were measured and whether a rate limit holds them; null when
      *  nothing was measured. */
     info: (dir: string): UsageInfo | null => {
