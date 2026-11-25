@@ -161,7 +161,9 @@ The endpoint does not report the 5-hour window for every plan (`five_hour` comes
 while the account's chats are being refused). So the plugin also reads Claude Code's transcripts
 in every known config directory: each refusal there names its window and when it resets, and the
 `session-owner` line before it names the login it hit. While such a refusal holds, that window
-shows as full until its reset. Only transcripts written in the last six hours are read the first
+shows as full until its reset. The server sometimes answers a login again before the reset it named,
+so the latest event decides: a refusal stops counting once a later request of the same login is
+answered in any chat, and a newer refusal shows the window as full again. Only transcripts written in the last six hours are read the first
 time, and after that only what was appended; subagent transcripts are skipped, as they name no
 owner of their own.
 
