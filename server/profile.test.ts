@@ -33,7 +33,7 @@ function fake(over: Partial<ProfileDeps> = {}) {
 
 test("a directory's identity is its own login's answer", async () => {
   const { profiles } = fake();
-  assert.deepEqual(await profiles.identityOf(DIR, DEFAULT_DIR), { email: "bob@example.com", orgName: "SSV Ltd", orgId: "org-ssv", rateLimitTier: "" });
+  assert.deepEqual(await profiles.identityOf(DIR, DEFAULT_DIR), { email: "bob@example.com", orgName: "SSV Ltd", orgId: "org-ssv", rateLimitTier: "", accountId: "acct-1" });
 });
 
 test("a second ask within the window reads nothing", async () => {
@@ -92,7 +92,7 @@ test("a Keychain dialog keeps the last answer and is not brought back within the
   assert.equal(await blockedProfiles.identityOf(DIR, DEFAULT_DIR), null, "nothing known yet is null");
   await blockedProfiles.identityOf(DIR, DEFAULT_DIR);
   assert.equal(blocked, 1, "the dialog is not asked for again within the window");
-  assert.deepEqual(first, { email: "bob@example.com", orgName: "SSV Ltd", orgId: "org-ssv", rateLimitTier: "" });
+  assert.deepEqual(first, { email: "bob@example.com", orgName: "SSV Ltd", orgId: "org-ssv", rateLimitTier: "", accountId: "acct-1" });
 });
 
 test("a failed read after a good one keeps the good one", async () => {
@@ -132,7 +132,7 @@ test("an expired token is never sent", async () => {
 
 test("a profile without an account email names nobody", () => {
   assert.equal(parseProfile(JSON.stringify({ organization: { name: "x" } })), null);
-  assert.deepEqual(parseProfile(JSON.stringify(SSV)), { email: "bob@example.com", orgName: "SSV Ltd", orgId: "org-ssv", rateLimitTier: "" });
+  assert.deepEqual(parseProfile(JSON.stringify(SSV)), { email: "bob@example.com", orgName: "SSV Ltd", orgId: "org-ssv", rateLimitTier: "", accountId: "acct-1" });
 });
 
 const cached: Identity = { loggedIn: true, email: "kain@example.com", orgName: "Evodev", subscriptionType: "team" };
@@ -144,7 +144,7 @@ test("the organisation's rate limit tier is read from the profile, empty when it
 });
 
 test("a login's own answer replaces the cached email and organisation, and keeps the rest", () => {
-  assert.deepEqual(withProfile(cached, { email: "bob@example.com", orgName: "SSV Ltd", orgId: "org-ssv", rateLimitTier: "" }), {
+  assert.deepEqual(withProfile(cached, { email: "bob@example.com", orgName: "SSV Ltd", orgId: "org-ssv", rateLimitTier: "", accountId: "acct-1" }), {
     loggedIn: true,
     email: "bob@example.com",
     orgName: "SSV Ltd",
@@ -158,7 +158,7 @@ test("a login's own answer replaces the cached email and organisation, and keeps
 
 test("only a logged-in Claude account is asked", async () => {
   let asked = 0;
-  const profile = async () => ((asked += 1), { email: "bob@example.com", orgName: "SSV Ltd", orgId: "org-ssv", rateLimitTier: "" });
+  const profile = async () => ((asked += 1), { email: "bob@example.com", orgName: "SSV Ltd", orgId: "org-ssv", rateLimitTier: "", accountId: "acct-1" });
   const claude = { provider: "claude", home: DIR };
   assert.equal((await ownLogin(claude, cached, profile)).orgName, "SSV Ltd");
   assert.equal((await ownLogin({ provider: "codex", home: DIR }, cached, profile)).orgName, "Evodev");
@@ -172,4 +172,11 @@ test("a profile that throws leaves the discovered identity", async () => {
     throw new Error("network");
   });
   assert.deepEqual(identity, cached);
+});
+
+test("known() answers from what was last read, without reading", async () => {
+  const { profiles } = fake();
+  assert.equal(profiles.known(DIR), null);
+  await profiles.identityOf(DIR, DEFAULT_DIR);
+  assert.equal(profiles.known(DIR)?.accountId, "acct-1");
 });

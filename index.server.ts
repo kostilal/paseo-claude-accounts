@@ -71,6 +71,7 @@ import { OVERVIEW_SNAPSHOT_FILE, STATE_FILE, USAGE_HISTORY_FILE, USAGE_READINGS_
 import { switchAccount } from "./server/switchAccount.ts";
 import { transcriptExists, unsavedSession } from "./server/transcript.ts";
 import { listChats, switchAll } from "./server/switchAll.ts";
+import { createQuotaHits, rawBar, withHits } from "./server/quotaHits.ts";
 import { createUsage, liveDeps } from "./server/usage.ts";
 
 export default function contribute(server: PluginServerContext) {
@@ -80,17 +81,32 @@ export default function contribute(server: PluginServerContext) {
   let freshForMs = FRESH_FOR_MS;
   // Every reading taken anyway goes into the history the forecast reads; none is taken for it.
   const history = createHistory({ path: USAGE_HISTORY_FILE });
+  // Who each account's own login belongs to; discovery's answer comes from a cache that chats
+  // running on another account rewrite.
+  const profiles = createProfiles();
+  // Limits each login ran into, from Claude Code's transcripts: the usage endpoint no longer
+  // reports the 5-hour window for every plan, even while it refuses the account's chats.
+  const quotaHits = createQuotaHits();
+  void allConfigDirs().then((dirs) => quotaHits.watch([...dirs, unboundDir()]), () => undefined);
   const usage = createUsage(
     {
       ...liveDeps,
       onReading: (dir, result, measuredAt) => void history.record(dir, result, measuredAt),
       saved: createReadings({ path: USAGE_READINGS_FILE }),
+      overlay: (dir, result) => {
+        quotaHits.watch([dir]);
+        void quotaHits.refresh().catch(() => undefined);
+        // Only a directory with numbers is asked who it is: one whose read failed or timed out
+        // could bring its Keychain dialog back.
+        if (result.state !== "ok" && result.state !== "none") return result;
+        const who = profiles.known(dir);
+        if (who === null) void profiles.identityOf(dir, defaultDir()).catch(() => undefined);
+        if (!who?.accountId) return result;
+        return withHits(result, quotaHits.of(who.accountId, who.orgId), Date.now());
+      },
     },
     () => freshForMs,
   );
-  // Who each account's own login belongs to; discovery's answer comes from a cache that chats
-  // running on another account rewrite.
-  const profiles = createProfiles();
   const discovery = createDiscovery();
   const log = (line: string) => console.error(line);
   const snapshot = createSnapshot({ path: OVERVIEW_SNAPSHOT_FILE, log });
@@ -324,7 +340,10 @@ export default function contribute(server: PluginServerContext) {
     const accounts = overview.accounts.map((row) => ({ ...row, autoNow: now !== "" && row.accountIds.includes(now) }));
     const answer = { ...overview, accounts, overridingVar: override };
     // Not awaited: the answer does not wait for the disk, and a failed save only logs.
-    if (answer.error === "") void snapshot.save(answer);
+    // Saved with the endpoint's own numbers: the forecast reads this, and a refusal laid over a
+    // window would make it model a window the account does not report.
+    const raw = accounts.map((row) => ({ ...row, fiveHour: rawBar(row.fiveHour), sevenDay: rawBar(row.sevenDay) }));
+    if (answer.error === "") void snapshot.save({ ...answer, accounts: raw });
     return answer;
   });
 
