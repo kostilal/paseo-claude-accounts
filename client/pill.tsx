@@ -15,7 +15,7 @@ import { type Strings, t } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { nearlyFull } from "../shared/auto.ts";
 import { type PillAccount, type SwitchCode, claudeProvidersRpc, pillStateRpc, switchAccountRpc } from "../shared/switch.ts";
-import { currentOf, exhaustedResetIn, hasSpare, pillFigure, pillLabel, pillPercent, pillTag, planName, refreshNotice, rowAgeText, tightestOf, usageLine, weekLine } from "./format.ts";
+import { currentOf, exhaustedResetIn, hasSpare, measuredText, pillFigure, pillLabel, pillPercent, pillTag, planName, refreshNotice, rowAgeText, tightestOf, usageLine, weekLine } from "./format.ts";
 import { createPillRegistry, trackClaudeAgents } from "./pill-registry.ts";
 import { AccountRing } from "./ring.tsx";
 import { typeScale } from "./typography.ts";
@@ -343,6 +343,11 @@ export function AccountPopover(props: PluginButtonContentProps) {
                         {weekLine(account, now, strings) !== "" && (
                           <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
                             {weekLine(account, now, strings)}
+                          </Text>
+                        )}
+                        {measuredText(account, now, strings) !== "" && (
+                          <Text style={{ ...typeScale.meta, color: theme.colors.statusWarning }} numberOfLines={1}>
+                            {measuredText(account, now, strings)}
                           </Text>
                         )}
                         {account.usage === "expired" && (

@@ -828,14 +828,3 @@ test("a 429 that names no wait, on a token of unknown life, says so in the log",
   assert.match(lines[0]!, /retry-after none/);
   assert.match(lines[0]!, /token expiry unknown/);
 });
-
-test("the overlay is laid over new and cached readings alike", async () => {
-  const usage = createUsage({
-    readCredential: async () => ({ token: "token", expiresAt: null }),
-    request: async () => body(200, { five_hour: null, seven_day: { utilization: 79, resets_at: "2026-11-27T14:00:00Z" } }),
-    version: async () => "2.1.332",
-    overlay: (_dir, result) => ({ ...result, fiveHour: { utilization: 100, resetsAt: "2026-11-25T16:10:00.000Z" } }),
-  });
-  assert.equal((await usage.measure(DIR, HOME, true)).fiveHour?.utilization, 100);
-  assert.equal(usage.cached(DIR)?.fiveHour?.utilization, 100);
-});

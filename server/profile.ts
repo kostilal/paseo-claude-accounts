@@ -19,9 +19,6 @@ export interface ProfileIdentity {
   orgId: string;
   /** The organisation's `rate_limit_tier`, such as `default_claude_max_20x`; "" when absent. */
   rateLimitTier: string;
-  /** The account's uuid, as Claude Code writes it into transcripts; absent or "" when not
-   *  answered. */
-  accountId?: string;
 }
 
 export interface ProfileDeps {
@@ -71,7 +68,6 @@ export function parseProfile(raw: string): ProfileIdentity | null {
     orgName: typeof organization.name === "string" ? organization.name : "",
     orgId: typeof organization.uuid === "string" ? organization.uuid : "",
     rateLimitTier: typeof organization.rate_limit_tier === "string" ? organization.rate_limit_tier : "",
-    accountId: typeof account.uuid === "string" ? account.uuid : "",
   };
 }
 
@@ -132,8 +128,5 @@ export function createProfiles(deps: ProfileDeps = liveDeps) {
     return keep();
   }
 
-  /** The last answer for `dir`, without reading anything; null when there is none yet. */
-  const known = (dir: string): ProfileIdentity | null => cache.get(dir)?.identity ?? null;
-
-  return { identityOf, known };
+  return { identityOf };
 }
