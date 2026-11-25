@@ -13,6 +13,14 @@ import type { UsageResult } from "./usage.ts";
  * the window and its reset time (`quotaLimits`), and records whose login the session runs on
  * (`session-owner` lines with the account and organisation uuids). A refusal is pinned on the
  * owner line before it, since a chat moved to another account keeps writing the same file.
+ *
+ * A refusal's reset time is only what the server said then: a login refused "until 17:10" was
+ * answered again from 16:04, then refused again. So the latest event decides: a refusal stops
+ * counting once the same login has been answered after it, in any transcript, and a newer
+ * refusal counts again. An answer is dated
+ * by the request that produced it (the `api-request` line before it), not by when its text was
+ * written: a request accepted just before the limit can stream for minutes after a refusal in
+ * another chat. An answer paid for by extra usage also lifts it, as the account works again.
  */
 
 /** Windows Claude Code names in `quotaLimits.rateLimitType`, as the meter calls them. */
@@ -34,6 +42,8 @@ export interface QuotaHit {
   window: WindowKey;
   /** When the window opens again, ms since the epoch. */
   resetsAt: number;
+  /** When the refusal was written, ms since the epoch; 0 when the line carries no time. */
+  at: number;
 }
 
 interface Owner {
@@ -46,19 +56,47 @@ interface FileState {
   offset: number;
   /** The owner in force at `offset`. */
   owner: Owner | null;
+  /** When the last request before `offset` was sent, ms since the epoch; 0 if none. */
+  requestAt: number;
   /** A line cut off by the end of the file, finished by the next read. */
   partial: string;
   hits: QuotaHit[];
+  /** The latest time each login was answered in this file, by `loginKey`. */
+  answered: Map<string, number>;
 }
 
-/** Reads transcript lines in order, keeping the owner in force and collecting refusals.
- *  Lines that are not JSON or carry neither are skipped. */
-export function readLines(lines: readonly string[], start: Owner | null): { owner: Owner | null; hits: QuotaHit[] } {
+const loginKey = (accountId: string, orgId: string) => `${accountId}\n${orgId}`;
+
+/** A transcript line's time in ms, or 0 when it carries none. */
+function timeOf(entry: Record<string, unknown>): number {
+  const at = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : Number.NaN;
+  return Number.isFinite(at) ? at : 0;
+}
+
+export interface ReadResult {
+  owner: Owner | null;
+  requestAt: number;
+  hits: QuotaHit[];
+  /** The latest time each login was answered by the model, by `loginKey`. */
+  answered: Map<string, number>;
+}
+
+/** Reads transcript lines in order, keeping the owner in force and collecting refusals and
+ *  answers. Lines that are not JSON or carry none of these are skipped. */
+export function readLines(lines: readonly string[], start: Owner | null, startRequestAt = 0): ReadResult {
   let owner = start;
+  let requestAt = startRequestAt;
   const hits: QuotaHit[] = [];
+  const answered = new Map<string, number>();
   for (const line of lines) {
-    // Cheap filter first: most lines are neither, and some are megabytes long.
-    if (!line.includes('"session-owner"') && !line.includes('"quotaLimits"')) continue;
+    // Cheap filter first: most lines are none of these, and some are megabytes long.
+    if (
+      !line.includes('"session-owner"') &&
+      !line.includes('"quotaLimits"') &&
+      !line.includes('"type":"assistant"') &&
+      !line.includes('"type":"api-request"')
+    )
+      continue;
     let entry: Record<string, unknown>;
     try {
       entry = record(JSON.parse(line));
@@ -71,14 +109,28 @@ export function readLines(lines: readonly string[], start: Owner | null): { owne
       if (typeof accountId === "string" && typeof orgId === "string" && accountId !== "") owner = { accountId, orgId };
       continue;
     }
+    if (entry.type === "api-request") {
+      requestAt = timeOf(entry);
+      continue;
+    }
+    if (owner === null) continue;
     const quota = record(entry.quotaLimits);
-    if (quota.status !== "rejected" || owner === null) continue;
-    const window = WINDOWS[quota.rateLimitType as keyof typeof WINDOWS];
-    const resetsAt = quota.resetsAt;
-    if (window === undefined || typeof resetsAt !== "number" || !Number.isFinite(resetsAt)) continue;
-    hits.push({ ...owner, window, resetsAt: resetsAt * 1000 });
+    if (quota.status === "rejected") {
+      const window = WINDOWS[quota.rateLimitType as keyof typeof WINDOWS];
+      const resetsAt = quota.resetsAt;
+      if (window === undefined || typeof resetsAt !== "number" || !Number.isFinite(resetsAt)) continue;
+      hits.push({ ...owner, window, resetsAt: resetsAt * 1000, at: timeOf(entry) });
+      continue;
+    }
+    // A reply the model wrote, not an error Claude Code put in its place (`<synthetic>`).
+    if (entry.type !== "assistant" || entry.isApiErrorMessage === true) continue;
+    if (record(entry.message).model === "<synthetic>") continue;
+    // Dated by its request; by its own line only when no request was seen before it.
+    const at = requestAt > 0 ? requestAt : timeOf(entry);
+    const key = loginKey(owner.accountId, owner.orgId);
+    if (at > (answered.get(key) ?? 0)) answered.set(key, at);
   }
-  return { owner, hits };
+  return { owner, requestAt, hits, answered };
 }
 
 /** Each bar `withHits` made, with the endpoint's own one it stands in for. */
@@ -162,16 +214,18 @@ export function createQuotaHits(deps: { fs?: QuotaFs; now?: () => number } = {})
     // Rewritten or truncated: read again from the start.
     if (state === undefined || found.size < state.offset) {
       if (now() - found.mtimeMs > LOOKBACK_MS) return null;
-      state = { offset: 0, owner: null, partial: "", hits: [] };
+      state = { offset: 0, owner: null, requestAt: 0, partial: "", hits: [], answered: new Map() };
     }
     while (found.size > state.offset) {
       const to = Math.min(found.size, state.offset + CHUNK_BYTES);
       const text: string = state.partial + (await fs.read(path, state.offset, to));
       const lines = text.split("\n");
       const partial = lines.pop() ?? "";
-      const read: { owner: Owner | null; hits: QuotaHit[] } = readLines(lines, state.owner);
+      const read: ReadResult = readLines(lines, state.owner, state.requestAt);
       const live: QuotaHit[] = [...state.hits, ...read.hits].filter((hit) => hit.resetsAt > now());
-      state = { offset: to, owner: read.owner, partial, hits: live };
+      const answered: Map<string, number> = new Map(state.answered);
+      for (const [key, at] of read.answered) if (at > (answered.get(key) ?? 0)) answered.set(key, at);
+      state = { offset: to, owner: read.owner, requestAt: read.requestAt, partial, hits: live, answered };
     }
     files.set(path, state);
     return state;
@@ -212,12 +266,17 @@ export function createQuotaHits(deps: { fs?: QuotaFs; now?: () => number } = {})
       });
       return running;
     },
-    /** Live refusals of one login. */
+    /** Live refusals of one login: not reset yet, and not followed by an answer to it. A refusal
+     *  with no time cannot be ordered against answers, so it holds until its reset. */
     of(accountId: string, orgId: string): QuotaHit[] {
+      const key = loginKey(accountId, orgId);
+      let answeredAt = 0;
+      for (const state of files.values()) answeredAt = Math.max(answeredAt, state.answered.get(key) ?? 0);
       const found: QuotaHit[] = [];
       for (const state of files.values()) {
         for (const hit of state.hits) {
-          if (hit.accountId === accountId && hit.orgId === orgId && hit.resetsAt > now()) found.push(hit);
+          if (hit.accountId !== accountId || hit.orgId !== orgId) continue;
+          if (hit.resetsAt > now() && (hit.at === 0 || hit.at >= answeredAt)) found.push(hit);
         }
       }
       return found;
