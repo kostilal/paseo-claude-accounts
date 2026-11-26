@@ -21,7 +21,7 @@ import { setDefaultRpc } from "../shared/defaults.ts";
 import { type Strings, usageErrorText } from "../shared/i18n.ts";
 import { detectAppLocale, usePreferences, useStrings } from "./locale.ts";
 import { PROVIDERS, type ProviderId, providerForHome } from "../shared/providers.ts";
-import { formatReset, formatWait, planName, providerName, savedAtText, tightestOf } from "./format.ts";
+import { formatReset, formatWait, measuredText, planName, providerName, savedAtText, tightestOf } from "./format.ts";
 import { ForecastCard } from "./forecast.tsx";
 import { revealNotice } from "./reveal-notice.ts";
 import { AccountRing } from "./ring.tsx";
@@ -194,6 +194,7 @@ function LoginCard({
   const title = loginTitle(row, strings);
   const tightest = tightestOf(row.fiveHour, row.sevenDay);
   const revealFailure = row.loggedIn ? revealNotice(showUsage, row.switchTo, strings) : null;
+  const measured = row.loggedIn ? measuredText(row, now, strings) : "";
 
   // Only failures: an opened terminal says what to do and when it is done, and a note that it
   // opened would outlive the approval.
@@ -252,6 +253,7 @@ function LoginCard({
         <View style={{ gap: 8 }}>
           <Meter theme={theme} label={`${strings.fiveHourUsage}${resetSuffix(row.fiveHour)}`} bar={row.fiveHour} />
           <Meter theme={theme} label={`${strings.sevenDayUsage}${resetSuffix(row.sevenDay)}`} bar={row.sevenDay} />
+          {measured !== "" && <Text style={{ ...typeScale.meta, color: theme.colors.statusWarning }}>{measured}</Text>}
         </View>
       )}
 
@@ -369,7 +371,7 @@ export function AccountsSurface({ theme, layout }: PluginSurfaceProps) {
               ...old,
               accounts: old.accounts.map((a) =>
                 a.id === row.id
-                  ? { ...a, usage: row.usage, fiveHour: row.fiveHour, sevenDay: row.sevenDay, usageErrorCode: row.usageErrorCode, usageError: row.usageError }
+                  ? { ...a, usage: row.usage, fiveHour: row.fiveHour, sevenDay: row.sevenDay, usageErrorCode: row.usageErrorCode, usageError: row.usageError, usageAt: row.usageAt, heldUntil: row.heldUntil }
                   : a,
               ),
             },

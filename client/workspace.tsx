@@ -9,7 +9,7 @@ import type { PillAccount } from "../shared/switch.ts";
 import { setDefaultRpc } from "../shared/defaults.ts";
 import { AUTO } from "../shared/registry.ts";
 import { type WorkspaceState, workspaceStateRpc } from "../shared/workspace.ts";
-import { tightestOf, usageLine, weekLine } from "./format.ts";
+import { measuredText, tightestOf, usageLine, weekLine } from "./format.ts";
 import { detectAppLocale, useStrings } from "./locale.ts";
 import { loginTitle } from "./pill.tsx";
 import { AccountRing } from "./ring.tsx";
@@ -107,6 +107,7 @@ function Row(props: {
   const { theme, title, selected, onPress, account, now = 0, strings } = props;
   const tightest = account === undefined ? null : tightestOf(account.fiveHour, account.sevenDay);
   const week = account === undefined || strings === undefined ? "" : weekLine(account, now, strings);
+  const measured = account === undefined || strings === undefined ? "" : measuredText(account, now, strings);
   return (
     <Pressable
       accessibilityRole="button"
@@ -143,6 +144,11 @@ function Row(props: {
         {week !== "" && (
           <Text style={{ ...typeScale.meta, color: theme.colors.foregroundMuted }} numberOfLines={1}>
             {week}
+          </Text>
+        )}
+        {measured !== "" && (
+          <Text style={{ ...typeScale.meta, color: theme.colors.statusWarning }} numberOfLines={1}>
+            {measured}
           </Text>
         )}
       </View>

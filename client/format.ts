@@ -223,6 +223,20 @@ export function rowAgeText(at: number, heldUntil: number | null, now: number, st
   return updatedAgoText(at, now, strings);
 }
 
+/** The line under an account's numbers when they may no longer hold, because a rate limit keeps
+ *  them or the last read failed: how long ago they were measured. "" while they are current, and
+ *  when there are no numbers or no time to date them by. */
+export function measuredText(
+  row: Pick<PillAccount, "usage" | "fiveHour" | "sevenDay" | "usageAt" | "heldUntil">,
+  now: number,
+  strings: Strings,
+): string {
+  if (row.usageAt === null || (row.fiveHour === null && row.sevenDay === null)) return "";
+  const held = row.heldUntil !== null && row.heldUntil > now;
+  if (!held && row.usage !== "error") return "";
+  return strings.measuredAgo.replace("{when}", updatedAgoText(row.usageAt, now, strings));
+}
+
 /** Two logins in the one line there is for both: whose each is, when both titles start with
  *  that (`loginName`) and it tells them apart, or else what comes before the @, if that does. */
 export function shortLogins(a: string, b: string): [string, string] {

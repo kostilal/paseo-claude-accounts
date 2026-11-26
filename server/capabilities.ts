@@ -214,7 +214,7 @@ export const OPERATIONS: AccountsOperation[] = [
     fixed: { refresh: false, force: false },
     title: "Claude accounts and their usage",
     description:
-      "One row per login on this Mac. name: the account's label; email, orgName, subscriptionType: whose login and which plan; isDefault: new chats open on it; usage: ok, expired, unauthorised, none, error or unsupported, with fiveHour (null with ok: none reported) and sevenDay: percent used, reset time. switchTo is the account to switch to, empty when nobody is logged in to it. Usage may be as old as the auto-refresh interval (default ten minutes). error claude-not-found: no claude command. overridingVar: a variable that makes switching useless. A CHAT's account: read chat_account, not isDefault.",
+      "One row per login on this Mac. name: the account's label; email, orgName, subscriptionType: whose login and which plan; isDefault: new chats open on it; usage: ok, expired, unauthorised, none, error or unsupported, with fiveHour (null with ok: none reported) and sevenDay: percent used, reset time. switchTo is the account to switch to, empty when nobody is logged in to it. usageAt: measured at (ms); a rate limit keeps old numbers till heldUntil. error claude-not-found: no claude command. overridingVar: a variable that makes switching useless. A CHAT's account: read chat_account, not isDefault.",
     input: none,
     fields: OVERVIEW_FIELDS,
   },

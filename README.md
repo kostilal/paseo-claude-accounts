@@ -155,17 +155,7 @@ directory. The screen and the pill try to read every logged-in account in the ba
 often as the **Auto-refresh** setting says (every ten minutes by default). If macOS has not yet allowed Keychain access, a background read gives up
 after three seconds and the row shows **Show usage** instead; a dialog may flash briefly. Press
 **Show usage** once and choose "Always Allow" so later reads go through without asking.
-The endpoint rate-limits aggressively; on a 429 the last reading is kept until the wait is over, a reload of the plugin or a daemon restart keeps both, and the row says how long the wait has left.
-
-The endpoint does not report the 5-hour window for every plan (`five_hour` comes back empty, even
-while the account's chats are being refused). So the plugin also reads Claude Code's transcripts
-in every known config directory: each refusal there names its window and when it resets, and the
-`session-owner` line before it names the login it hit. While such a refusal holds, that window
-shows as full until its reset. The server sometimes answers a login again before the reset it named,
-so the latest event decides: a refusal stops counting once a later request of the same login is
-answered in any chat, and a newer refusal shows the window as full again. Only transcripts written in the last six hours are read the first
-time, and after that only what was appended; subagent transcripts are skipped, as they name no
-owner of their own.
+The endpoint rate-limits aggressively; on a 429 the last reading is kept until the wait is over, a reload of the plugin or a daemon restart keeps both, and the row says how long the wait has left. While numbers are held this way, or the last read failed, a line under them on the Accounts screen and in both popovers says how long ago they were measured: the account may have used much more since.
 
 **The forecast** works from what that endpoint reports, percentages and reset times for the 5-hour
 window and the week, and from the plugin's own record of them, kept for eight days. No request is

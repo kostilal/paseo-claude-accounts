@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { t } from "../shared/i18n.ts";
 import type { PillAccount, PillState } from "../shared/switch.ts";
-import { exhaustedResetIn, formatReset, formatWait, hasSpare, pillFigure, pillLabel, pillPercent, pillTag, planName, refreshNotice, rowAgeText, savedAtText, shortLogins, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
+import { exhaustedResetIn, formatReset, formatWait, hasSpare, measuredText, pillFigure, pillLabel, pillPercent, pillTag, planName, refreshNotice, rowAgeText, savedAtText, shortLogins, tightestOf, updatedAgoText, usageLine, weekLine } from "./format.ts";
 
 const strings = t("ru");
 const now = Date.parse("2026-09-16T12:00:00Z");
@@ -232,6 +232,25 @@ test("while the usage service makes a row wait, its corner says for how long ins
   assert.equal(rowAgeText(measured, now + 15 * 60_000, now, t("ru")), "пауза 15 мин");
   assert.equal(rowAgeText(measured, now - 1, now, en), "3 min ago");
   assert.equal(rowAgeText(measured, null, now, en), "3 min ago");
+});
+
+test("numbers a rate limit holds, or a failed read leaves, say how long ago they were measured", () => {
+  const measured = now - 2 * 3_600_000;
+  const held = account({ usageAt: measured, heldUntil: now + 15 * 60_000 });
+  assert.equal(measuredText(held, now, en), "Measured 2 h ago");
+  assert.equal(measuredText(held, now, strings), "Замерено 2 ч назад");
+  assert.equal(measuredText(held, now, t("uk")), "Виміряно 2 год тому");
+  assert.equal(measuredText(account({ usageAt: measured, usage: "error" }), now, en), "Measured 2 h ago");
+  // A week alone is still a number to date.
+  assert.equal(measuredText({ ...held, fiveHour: null }, now, en), "Measured 2 h ago");
+});
+
+test("current numbers, and a row with none or no time to date them by, get no such line", () => {
+  const measured = now - 2 * 3_600_000;
+  assert.equal(measuredText(account({ usageAt: measured }), now, en), "");
+  assert.equal(measuredText(account({ usageAt: measured, heldUntil: now - 1 }), now, en), "");
+  assert.equal(measuredText(account({ usageAt: measured, usage: "error", fiveHour: null, sevenDay: null }), now, en), "");
+  assert.equal(measuredText(account({ usageAt: null, heldUntil: now + 60_000 }), now, en), "");
 });
 
 test("two logins in one line lose their domains, unless that is all that tells them apart", () => {

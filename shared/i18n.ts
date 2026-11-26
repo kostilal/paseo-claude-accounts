@@ -162,6 +162,7 @@ export interface Strings {
   updatedAgo: string;
   rowPaused: string;
   updatedJustNow: string;
+  measuredAgo: string;
   /** `{wait}`: how long the usage service asked to wait. */
   refreshHeld: string;
   /** Under the Accounts header while the saved overview is shown; `{time}` is when it was saved. */
@@ -412,6 +413,7 @@ const en: Strings = {
   updatedAgo: "{ago} ago",
   rowPaused: "paused {wait}",
   updatedJustNow: "just now",
+  measuredAgo: "Measured {when}",
   refreshHeld: "The usage service asked to wait {wait}",
   savedDataNote: "Saved data from {time} · updating…",
   savedDataFailed: "Saved data from {time}",
@@ -656,6 +658,7 @@ const ru: Strings = {
   updatedAgo: "{ago} назад",
   rowPaused: "пауза {wait}",
   updatedJustNow: "только что",
+  measuredAgo: "Замерено {when}",
   refreshHeld: "Сервис лимитов попросил подождать {wait}",
   savedDataNote: "Сохранённые данные от {time} · обновляю…",
   savedDataFailed: "Сохранённые данные от {time}",
@@ -900,6 +903,7 @@ const uk: Strings = {
   updatedAgo: "{ago} тому",
   rowPaused: "пауза {wait}",
   updatedJustNow: "щойно",
+  measuredAgo: "Виміряно {when}",
   refreshHeld: "Сервіс лімітів попросив зачекати {wait}",
   savedDataNote: "Збережені дані від {time} · оновлюю…",
   savedDataFailed: "Збережені дані від {time}",
