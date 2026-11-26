@@ -206,6 +206,7 @@ In Paseo's settings, under **Accounts**:
 
 - **Language**: English, Русский, Українська, or the same as Paseo
 - **Pill above chats**: turn the composer pill off everywhere
+- **Show in Pulse**: whether [Paseo Pulse](#in-paseo-pulse) gets the logins' usage and notices; on by default
 - **Default account for new chats**: an account, **Auto**, or not set
 - **How Auto picks**: the week that resets soonest first, or the most room left first
 - **One account per task**: off by default
@@ -230,6 +231,32 @@ on, and move one chat or every chat to an account. The plugin describes this its
 Moves are read back to you before they run, naming the chat from Paseo's own data and the accounts
 from the plugin's, and a refused switch is reported as not done. Adding, deleting and logging in are
 not offered.
+
+## In Paseo Pulse
+
+Paseo Pulse shows plugins' readings in Paseo, in widgets and in notifications. Claude Accounts answers
+it with three RPCs (`server/pulse.ts`, contract `paseo.pulse/1`):
+
+- `meta.pulse`, the manifest: one entity kind, the Claude login, and per login the 5-hour and weekly
+  windows (percent used, with the reset time), the countdowns to each reset, whether new chats open on
+  it (or Auto would pick it now) and its plan. The hero is `fullest`, the fullest window of any login.
+  The meters turn warning at 80 % and critical at 95 %. There are no actions: switching a chat's
+  account restarts the chat and needs the chat named, which a widget or a notification cannot do.
+- `accounts.pulse`, the readings: only what the plugin already holds, the logins as the Accounts screen
+  last saw them with the usage cache laid over them. The answer never waits for Anthropic. While Pulse
+  reads it, the usage of the logins Pulse shows is refreshed in the background the way the Accounts
+  screen refreshes it: at the auto-refresh interval, at most once per interval for each login, never
+  during a rate-limit wait, and never for a login that has not been read once before (so it brings up
+  no Keychain prompt of its own). A login whose numbers are old reads as stale. Before the Accounts
+  screen has been opened once there are no logins to show. A login is an opaque id shown as
+  **Account 1**, **Account 2**, with its plan beside it: no email leaves the plugin.
+- `accounts.pulse-events`, by cursor: a window that goes over 80 % (`five_hour_warning`,
+  `week_warning`) or 95 % (`*_critical`), once per window, and a window that had gone over 80 % and
+  has reset (`*_reset`, info). A window already over 80 % when the daemon starts is not news. Kept in
+  memory, the newest 200; a restart empties it, and a cursor from before reads as a gap.
+
+**Show in Pulse** in the plugin's settings (on by default) takes the readings out and silences the
+events. The handlers never refuse: they cannot tell Pulse from anybody else.
 
 ## Limitations
 

@@ -76,6 +76,8 @@ export interface Strings {
   languageAuto: string;
   showPill: string;
   showPillHint: string;
+  settingsPulse: string;
+  settingsPulseHint: string;
   settingsHint: string;
   /** Settings → the account new chats open on. */
   defaultSetting: string;
@@ -350,6 +352,8 @@ const en: Strings = {
   languageAuto: "Same as Paseo",
   showPill: "Pill above chats",
   showPillHint: "The account ring and figure in the composer of every Claude chat. Switching happens there.",
+  settingsPulse: "Show in Pulse",
+  settingsPulseHint: "Each login's 5-hour and weekly usage, and a notice when a window passes 80 or 95 percent, in Paseo Pulse. Off: Pulse gets no readings and no notices. Accounts are shown as Account 1, 2, … with no email.",
   settingsHint: "Changes apply immediately.",
   defaultSetting: "Default account for new chats",
   defaultSettingNone: "Not set: a chat uses its folder's login",
@@ -595,6 +599,8 @@ const ru: Strings = {
   languageAuto: "Как в Paseo",
   showPill: "Пилюля над чатами",
   showPillHint: "Кольцо и цифра аккаунта в композере каждого чата Claude. Переключение делается там.",
+  settingsPulse: "Показывать в Pulse",
+  settingsPulseHint: "Расход 5-часового и недельного окон каждого входа и уведомление, когда окно проходит 80 или 95 процентов, в Paseo Pulse. Выкл: Pulse не получает ни показаний, ни уведомлений. Аккаунты называются Аккаунт 1, 2, … без почты.",
   settingsHint: "Изменения применяются сразу.",
   defaultSetting: "Аккаунт по умолчанию для новых чатов",
   defaultSettingNone: "Не задан: чат берёт вход своей папки",
@@ -840,6 +846,8 @@ const uk: Strings = {
   languageAuto: "Як у Paseo",
   showPill: "Пілюля над чатами",
   showPillHint: "Кільце й цифра акаунта в композері кожного чату Claude. Перемикання робиться там.",
+  settingsPulse: "Показувати в Pulse",
+  settingsPulseHint: "Витрата 5-годинного й тижневого вікон кожного входу та сповіщення, коли вікно проходить 80 або 95 відсотків, у Paseo Pulse. Вимк.: Pulse не отримує ні показань, ні сповіщень. Акаунти називаються Акаунт 1, 2, … без пошти.",
   settingsHint: "Зміни застосовуються одразу.",
   defaultSetting: "Акаунт за замовчуванням для нових чатів",
   defaultSettingNone: "Не задано: чат бере вхід своєї теки",
